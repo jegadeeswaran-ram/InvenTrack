@@ -23,10 +23,12 @@ const envOrigins = [
   .filter(Boolean);
 
 const allowedOrigins = [
-  'http://localhost:5173',
-  'http://localhost:3000',
+  '*',
   ...envOrigins,
 ].map(normalizeOrigin);
+
+const corsAllowAll =
+  allowedOrigins.includes('*') || process.env.CORS_ORIGIN === '*';
 
 // Allow any localhost port (Flutter web dev)
 const isLocalhostOrigin = (origin) => /^https?:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin || '');
@@ -35,6 +37,10 @@ app.use(
   cors({
     origin: (origin, callback) => {
       const normalizedOrigin = normalizeOrigin(origin);
+      // * in allowedOrigins means any origin; with credentials, cors reflects the request Origin
+      if (corsAllowAll) {
+        return callback(null, true);
+      }
       if (!origin || allowedOrigins.includes(normalizedOrigin) || isLocalhostOrigin(normalizedOrigin)) {
         return callback(null, true);
       }
