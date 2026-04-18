@@ -6,6 +6,10 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('Seeding Kulfi ICE InvenTrack database...');
 
+  // Keep seed idempotent so demo data can be recreated.
+  await prisma.sale.deleteMany();
+  await prisma.purchase.deleteMany();
+
   const adminPassword = await bcrypt.hash('admin123', 10);
   const admin = await prisma.user.upsert({
     where: { username: 'admin' },
@@ -18,6 +22,12 @@ async function main() {
     where: { username: 'sales1' },
     update: {},
     create: { name: 'Sales Person', username: 'sales1', password: salesPassword, role: 'SALES' },
+  });
+
+  await prisma.user.upsert({
+    where: { username: 'sales2' },
+    update: {},
+    create: { name: 'Sales Backup', username: 'sales2', password: salesPassword, role: 'SALES' },
   });
 
   const productDefs = [
@@ -46,14 +56,15 @@ async function main() {
     products.push({ ...p, costPerUnit: productDefs[i].costPerUnit, manufacturer: productDefs[i].manufacturer });
   }
 
-  // Dummy purchases — last 30 days
+  // Deterministic demo purchases — last 30 days
   const today = new Date();
-  const purchaseDates = [-28, -21, -14, -7, -2];
-  for (const daysAgo of purchaseDates) {
+  const purchaseOffsets = [-28, -21, -14, -7, -2];
+  for (let purchaseIndex = 0; purchaseIndex < purchaseOffsets.length; purchaseIndex++) {
     const date = new Date(today);
-    date.setDate(date.getDate() + daysAgo);
-    for (const p of products) {
-      const qty = Math.floor(Math.random() * 40) + 20;
+    date.setDate(date.getDate() + purchaseOffsets[purchaseIndex]);
+    for (let productIndex = 0; productIndex < products.length; productIndex++) {
+      const p = products[productIndex];
+      const qty = 24 + productIndex * 2 + purchaseIndex * 3;
       await prisma.purchase.create({
         data: {
           date,
@@ -67,25 +78,28 @@ async function main() {
     }
   }
 
-  // Dummy sales — last 25 days
-  const saleDates = [-25, -20, -15, -10, -5, -3, -1];
-  for (const daysAgo of saleDates) {
+  // Deterministic demo sales — last 25 days
+  const saleOffsets = [-25, -20, -15, -10, -5, -3, -1];
+  for (let saleIndex = 0; saleIndex < saleOffsets.length; saleIndex++) {
     const date = new Date(today);
-    date.setDate(date.getDate() + daysAgo);
-    for (const p of products) {
-      const qty = Math.floor(Math.random() * 15) + 5;
-      const pricePerUnit = productDefs.find(d => d.name === p.name).sellingPrice;
+    date.setDate(date.getDate() + saleOffsets[saleIndex]);
+    for (let productIndex = 0; productIndex < products.length; productIndex++) {
+      const p = products[productIndex];
+      const pricePerUnit = productDefs[productIndex].sellingPrice;
       const avgCostUnit = p.costPerUnit;
+      const quantity = 6 + (productIndex % 5) + saleIndex;
+      const salesUserId = saleIndex % 2 === 0 ? sales1.id : admin.id;
+
       await prisma.sale.create({
         data: {
           date,
           productId: p.id,
-          userId: sales1.id,
-          quantity: qty,
+          userId: salesUserId,
+          quantity,
           pricePerUnit,
-          totalRevenue: qty * pricePerUnit,
+          totalRevenue: quantity * pricePerUnit,
           avgCostUnit,
-          profit: (pricePerUnit - avgCostUnit) * qty,
+          profit: (pricePerUnit - avgCostUnit) * quantity,
         },
       });
     }
@@ -94,7 +108,7 @@ async function main() {
   console.log('Seed completed.');
   console.log('Admin:', admin.username, '/ admin123');
   console.log('Sales:', sales1.username, '/ sales123');
-  console.log(`Products: ${products.length}, Purchase batches: ${purchaseDates.length}, Sale batches: ${saleDates.length}`);
+  console.log(`Products: ${products.length}, Purchase batches: ${purchaseOffsets.length}, Sale batches: ${saleOffsets.length}`);
 }
 
 main()
