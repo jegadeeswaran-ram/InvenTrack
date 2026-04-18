@@ -14,22 +14,37 @@ const app = express();
 const PORT = process.env.PORT || 4000;
 
 // CORS
+const normalizeOrigin = (origin) => (origin || '').replace(/\/+$/, '').trim();
+const envOrigins = [
+  process.env.WEB_ORIGIN,
+  ...(process.env.WEB_ORIGINS || '').split(','),
+]
+  .map(normalizeOrigin)
+  .filter(Boolean);
+
 const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:3000',
-  process.env.WEB_ORIGIN,
-].filter(Boolean);
+  ...envOrigins,
+].map(normalizeOrigin);
 
 // Allow any localhost port (Flutter web dev)
-const isLocalhostOrigin = (origin) => /^http:\/\/localhost:\d+$/.test(origin || '');
+const isLocalhostOrigin = (origin) => /^https?:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin || '');
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin) || isLocalhostOrigin(origin)) return callback(null, true);
-      return callback(new Error('Not allowed by CORS'));
+      const normalizedOrigin = normalizeOrigin(origin);
+      if (!origin || allowedOrigins.includes(normalizedOrigin) || isLocalhostOrigin(normalizedOrigin)) {
+        return callback(null, true);
+      }
+
+      const corsError = new Error(`Origin ${normalizedOrigin} is not allowed by CORS`);
+      corsError.statusCode = 403;
+      return callback(corsError);
     },
     credentials: true,
+    optionsSuccessStatus: 204,
   })
 );
 
@@ -54,7 +69,8 @@ app.use('/api/media', mediaRoutes);
 // Global error handler
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  res.status(500).json({ message: err.message || 'Internal Server Error' });
+  const status = err.statusCode || 500;
+  res.status(status).json({ message: err.message || 'Internal Server Error' });
 });
 
 app.listen(PORT, () => {

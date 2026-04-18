@@ -14,10 +14,13 @@ import Products from './pages/Products';
 import Media from './pages/Media';
 
 function AppRoutes() {
-  const { token } = useAuth();
+  const { token, isAuthReady } = useAuth();
   return (
     <Routes>
-      <Route path="/login" element={token ? <Navigate to="/" replace /> : <Login />} />
+      <Route
+        path="/login"
+        element={!isAuthReady ? null : (token ? <Navigate to="/" replace /> : <Login />)}
+      />
       <Route path="/" element={<ProtectedRoute><Layout><Dashboard /></Layout></ProtectedRoute>} />
       <Route path="/purchase" element={<ProtectedRoute><Layout><PurchaseEntry /></Layout></ProtectedRoute>} />
       <Route path="/sales" element={<ProtectedRoute><Layout><SalesEntry /></Layout></ProtectedRoute>} />
