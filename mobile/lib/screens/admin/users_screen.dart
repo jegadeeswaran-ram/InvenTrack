@@ -83,7 +83,7 @@ class _UsersScreenState extends State<UsersScreen> {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  initialValue: role,
+                  value: role,
                   decoration: const InputDecoration(labelText: 'Role', prefixIcon: Icon(Icons.badge_outlined)),
                   items: const [
                     DropdownMenuItem(value: 'SALES', child: Text('SALES')),

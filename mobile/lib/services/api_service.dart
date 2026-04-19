@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 
 class ApiService {
   // Change this to your production Railway URL before building APK
-  static const String baseUrl = 'http://localhost:4000/api';
+  static const String baseUrl = 'https://inventrack-productions.up.railway.app/api';
 
   static Future<Map<String, String>> _headers(String? token) async {
     final headers = {'Content-Type': 'application/json'};

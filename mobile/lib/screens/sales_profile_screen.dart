@@ -43,7 +43,12 @@ class SalesProfileScreen extends StatelessWidget {
               const SizedBox(height: 32),
               _tile(context, icon: Icons.dark_mode_outlined, label: isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode', trailing: Switch(
                 value: isDark,
-                activeThumbColor: const Color(0xFF0097A7),
+                thumbColor: WidgetStateProperty.resolveWith((states) {
+                  if (states.contains(WidgetState.selected)) {
+                    return const Color(0xFF0097A7);
+                  }
+                  return null;
+                }),
                 onChanged: (_) => context.read<ThemeNotifier>().toggle(),
               )),
               const SizedBox(height: 10),

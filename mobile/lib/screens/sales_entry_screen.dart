@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -25,6 +27,10 @@ class _SalesEntryScreenState extends State<SalesEntryScreen> with TickerProvider
   bool _loadingProducts = true;
   String? _msg;
   bool _msgSuccess = false;
+  Timer? _msgTimer;
+
+  static const SpellCheckConfiguration _noSpellCheck =
+      SpellCheckConfiguration.disabled();
 
   late AnimationController _headerCtrl;
   late AnimationController _formCtrl;
@@ -48,6 +54,7 @@ class _SalesEntryScreenState extends State<SalesEntryScreen> with TickerProvider
 
   @override
   void dispose() {
+    _msgTimer?.cancel();
     _headerCtrl.dispose();
     _formCtrl.dispose();
     _listCtrl.dispose();
@@ -77,6 +84,20 @@ class _SalesEntryScreenState extends State<SalesEntryScreen> with TickerProvider
 
   double get _totalRevenue => (double.tryParse(_qtyCtrl.text) ?? 0) * (double.tryParse(_priceCtrl.text) ?? 0);
 
+  void _clearFeedbackSoon() {
+    _msgTimer?.cancel();
+    _msgTimer = Timer(const Duration(seconds: 3), () {
+      if (!mounted) return;
+      setState(() => _msg = null);
+    });
+  }
+
+  void _dismissMsgOnEdit() {
+    if (_msg == null) return;
+    _msgTimer?.cancel();
+    setState(() => _msg = null);
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedProduct == null) {
@@ -101,6 +122,7 @@ class _SalesEntryScreenState extends State<SalesEntryScreen> with TickerProvider
         _notesCtrl.clear();
         _selectedProduct = null;
       });
+      _clearFeedbackSoon();
       _loadTodaySales();
     } catch (e) {
       setState(() { _msg = e.toString(); _msgSuccess = false; });
@@ -196,7 +218,14 @@ class _SalesEntryScreenState extends State<SalesEntryScreen> with TickerProvider
                         Container(width: 36, height: 36, decoration: BoxDecoration(color: const Color(0xFF0097A7).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
                           child: const Icon(Icons.add_circle_outline_rounded, color: Color(0xFF0097A7), size: 20)),
                         const SizedBox(width: 10),
-                        const Text('New Sale Entry', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+                        Text(
+                          'New Sale Entry',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 16,
+                            color: cs.onSurface,
+                          ),
+                        ),
                       ]),
                       const SizedBox(height: 18),
 
@@ -204,12 +233,18 @@ class _SalesEntryScreenState extends State<SalesEntryScreen> with TickerProvider
                       InkWell(
                         onTap: () async {
                           final d = await showDatePicker(context: context, initialDate: _date, firstDate: DateTime(2020), lastDate: DateTime.now());
-                          if (d != null) setState(() => _date = d);
+                          if (d != null) {
+                            _dismissMsgOnEdit();
+                            setState(() => _date = d);
+                          }
                         },
                         borderRadius: BorderRadius.circular(10),
                         child: InputDecorator(
                           decoration: const InputDecoration(labelText: 'Date', prefixIcon: Icon(Icons.calendar_today_outlined)),
-                          child: Text(DateFormat('dd MMM yyyy').format(_date)),
+                          child: Text(
+                            DateFormat('dd MMM yyyy').format(_date),
+                            style: TextStyle(color: cs.onSurface),
+                          ),
                         ),
                       ),
                       const SizedBox(height: 14),
@@ -218,14 +253,17 @@ class _SalesEntryScreenState extends State<SalesEntryScreen> with TickerProvider
                       _loadingProducts
                           ? const Center(child: CircularProgressIndicator(color: Color(0xFF0097A7)))
                           : DropdownButtonFormField<dynamic>(
-                              initialValue: _selectedProduct,
+                              value: _selectedProduct,
                               decoration: const InputDecoration(labelText: 'Product', prefixIcon: Icon(Icons.icecream_outlined)),
                               hint: const Text('Select product…'),
                               items: _products.map((p) => DropdownMenuItem(value: p, child: Text(p['name']))).toList(),
-                              onChanged: (v) => setState(() {
-                                _selectedProduct = v;
-                                if (v != null) _priceCtrl.text = v['sellingPrice']?.toString() ?? '';
-                              }),
+                              onChanged: (v) {
+                                _dismissMsgOnEdit();
+                                setState(() {
+                                  _selectedProduct = v;
+                                  if (v != null) _priceCtrl.text = v['sellingPrice']?.toString() ?? '';
+                                });
+                              },
                             ),
                       const SizedBox(height: 14),
 
@@ -236,8 +274,14 @@ class _SalesEntryScreenState extends State<SalesEntryScreen> with TickerProvider
                           keyboardType: const TextInputType.numberWithOptions(decimal: true),
                           inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
                           decoration: const InputDecoration(labelText: 'Units Sold'),
+                          spellCheckConfiguration: _noSpellCheck,
+                          autocorrect: false,
+                          enableSuggestions: false,
                           validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
-                          onChanged: (_) => setState(() {}),
+                          onChanged: (_) {
+                            _dismissMsgOnEdit();
+                            setState(() {});
+                          },
                         )),
                         const SizedBox(width: 12),
                         Expanded(child: TextFormField(
@@ -245,8 +289,14 @@ class _SalesEntryScreenState extends State<SalesEntryScreen> with TickerProvider
                           keyboardType: const TextInputType.numberWithOptions(decimal: true),
                           inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
                           decoration: const InputDecoration(labelText: 'Price/Unit ₹'),
+                          spellCheckConfiguration: _noSpellCheck,
+                          autocorrect: false,
+                          enableSuggestions: false,
                           validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
-                          onChanged: (_) => setState(() {}),
+                          onChanged: (_) {
+                            _dismissMsgOnEdit();
+                            setState(() {});
+                          },
                         )),
                       ]),
                       const SizedBox(height: 14),
@@ -275,6 +325,8 @@ class _SalesEntryScreenState extends State<SalesEntryScreen> with TickerProvider
                         controller: _notesCtrl,
                         decoration: const InputDecoration(labelText: 'Notes (optional)', prefixIcon: Icon(Icons.note_outlined)),
                         maxLines: 2,
+                        spellCheckConfiguration: _noSpellCheck,
+                        onChanged: (_) => _dismissMsgOnEdit(),
                       ),
 
                       if (_msg != null) ...[
@@ -313,7 +365,10 @@ class _SalesEntryScreenState extends State<SalesEntryScreen> with TickerProvider
             Row(children: [
               Container(width: 4, height: 18, decoration: BoxDecoration(color: const Color(0xFF0097A7), borderRadius: BorderRadius.circular(2))),
               const SizedBox(width: 8),
-              const Text("Today's Entries", style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+              Text(
+                "Today's Entries",
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: cs.onSurface),
+              ),
               const Spacer(),
               if (_todaySales.isNotEmpty)
                 Container(
