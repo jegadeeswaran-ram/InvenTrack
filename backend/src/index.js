@@ -16,20 +16,18 @@ const PORT = process.env.PORT || 4000;
 
 // CORS
 const normalizeOrigin = (origin) => (origin || '').replace(/\/+$/, '').trim();
+const envCorsOrigin = normalizeOrigin(process.env.CORS_ORIGIN);
 const envOrigins = [
+  envCorsOrigin,
   process.env.WEB_ORIGIN,
   ...(process.env.WEB_ORIGINS || '').split(','),
 ]
   .map(normalizeOrigin)
   .filter(Boolean);
 
-const allowedOrigins = [
-  '*',
-  ...envOrigins,
-].map(normalizeOrigin);
+const allowedOrigins = envOrigins.filter((origin) => origin !== '*');
 
-const corsAllowAll =
-  allowedOrigins.includes('*') || process.env.CORS_ORIGIN === '*';
+const corsAllowAll = envCorsOrigin === '*' || (process.env.WEB_ORIGINS || '').includes('*');
 
 // Allow any localhost port (Flutter web dev)
 const isLocalhostOrigin = (origin) => /^https?:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin || '');
@@ -38,7 +36,6 @@ app.use(
   cors({
     origin: (origin, callback) => {
       const normalizedOrigin = normalizeOrigin(origin);
-      // * in allowedOrigins means any origin; with credentials, cors reflects the request Origin
       if (corsAllowAll) {
         return callback(null, true);
       }
@@ -50,7 +47,7 @@ app.use(
       corsError.statusCode = 403;
       return callback(corsError);
     },
-    credentials: true,
+    credentials: !corsAllowAll,
     optionsSuccessStatus: 204,
   })
 );
