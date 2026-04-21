@@ -100,7 +100,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
             TextFormField(controller: passCtrl, obscureText: true, decoration: const InputDecoration(labelText: 'Password'), validator: (v) => v!.isEmpty ? 'Required' : null),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
-              initialValue: role,
+              value: role,
               decoration: const InputDecoration(labelText: 'Role'),
               items: const [
                 DropdownMenuItem(value: 'admin', child: Text('Admin')),

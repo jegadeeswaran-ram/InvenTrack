@@ -179,7 +179,7 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
                 ),
                 const SizedBox(height: 10),
                 DropdownButtonFormField<dynamic>(
-                  initialValue: selectedProduct,
+                  value: selectedProduct,
                   decoration: const InputDecoration(labelText: 'Product'),
                   items: _products.map((p) => DropdownMenuItem(value: p, child: Text(p['name']))).toList(),
                   onChanged: (v) => setS(() => selectedProduct = v),
@@ -286,7 +286,7 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
                         ),
                         const SizedBox(height: 12),
                         DropdownButtonFormField<dynamic>(
-                          initialValue: _selectedProduct,
+                          value: _selectedProduct,
                           decoration: const InputDecoration(labelText: 'Product', prefixIcon: Icon(Icons.icecream_outlined)),
                           hint: const Text('Select product…'),
                           items: _products.map((p) => DropdownMenuItem(value: p, child: Text(p['name']))).toList(),

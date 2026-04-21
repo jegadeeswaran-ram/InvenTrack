@@ -43,7 +43,10 @@ class _SalesUserShellState extends State<SalesUserShell> {
           ),
         ],
       ),
-      body: IndexedStack(index: _index, children: _screens),
+      body: Material(
+        color: Theme.of(context).scaffoldBackgroundColor,
+        child: IndexedStack(index: _index, children: _screens),
+      ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: isDark ? const Color(0xFF0A1219) : Colors.white,

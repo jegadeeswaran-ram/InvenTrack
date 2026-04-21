@@ -9,6 +9,7 @@ const saleRoutes = require('./routes/sale.routes');
 const reportRoutes = require('./routes/report.routes');
 const userRoutes = require('./routes/user.routes');
 const mediaRoutes = require('./routes/media.routes');
+const { bucketEnabled, ensureLocalUploadsDir } = require('./services/storage.service');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -58,7 +59,10 @@ app.use(express.json());
 
 // Serve uploaded images
 const path = require('path');
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+if (!bucketEnabled) {
+  ensureLocalUploadsDir();
+  app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+}
 
 // Health check
 app.get('/health', (req, res) => res.json({ status: 'ok', app: 'Kulfi ICE InvenTrack' }));

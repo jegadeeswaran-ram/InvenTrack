@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 
 class ApiService {
   // Change this to your production Railway URL before building APK
-  static const String baseUrl = 'http://localhost:4000/api';
+  static const String baseUrl = 'https://inventrack-productions.up.railway.app/api';
 
   static Future<Map<String, String>> _headers(String? token) async {
     final headers = {'Content-Type': 'application/json'};
@@ -35,11 +35,17 @@ class ApiService {
     return jsonDecode(res.body);
   }
 
-  static Future<dynamic> uploadFile(String path, List<int> bytes, String filename, {String? token}) async {
+  static Future<dynamic> uploadFile(
+    String path,
+    List<int> bytes,
+    String filename, {
+    String? token,
+    String fieldName = 'image',
+  }) async {
     final uri = Uri.parse('$baseUrl$path');
     final req = http.MultipartRequest('POST', uri);
     if (token != null) req.headers['Authorization'] = 'Bearer $token';
-    req.files.add(http.MultipartFile.fromBytes('image', bytes, filename: filename));
+    req.files.add(http.MultipartFile.fromBytes(fieldName, bytes, filename: filename));
     final streamed = await req.send();
     final res = await http.Response.fromStream(streamed);
     _checkStatus(res);

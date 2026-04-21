@@ -28,7 +28,10 @@ class _AdminShellState extends State<AdminShell> {
   Widget build(BuildContext context) {
     final isDark = context.watch<ThemeNotifier>().isDark;
     return Scaffold(
-      body: IndexedStack(index: _selectedIndex, children: _screens),
+      body: Material(
+        color: Theme.of(context).scaffoldBackgroundColor,
+        child: IndexedStack(index: _selectedIndex, children: _screens),
+      ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           boxShadow: [BoxShadow(
