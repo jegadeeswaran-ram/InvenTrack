@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
 import '../../services/api_service.dart';
+import 'admin_shell.dart';
 
 class UsersScreen extends StatefulWidget {
   const UsersScreen({super.key});
@@ -202,8 +203,9 @@ class _UsersScreenState extends State<UsersScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Users')),
+      appBar: AppBar(title: const Text('Users'), leading: IconButton(icon: const Icon(Icons.menu_rounded), onPressed: () => ShellScope.of(context)?.scaffoldKey.currentState?.openDrawer())),
       floatingActionButton: FloatingActionButton(
+        heroTag: 'fab_users',
         onPressed: () => _showForm(),
         backgroundColor: const Color(0xFF0097A7),
         child: const Icon(Icons.person_add, color: Colors.white),

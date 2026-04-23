@@ -41,7 +41,10 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 },
 });
 
-const getBaseUrl = (req) => `${req.protocol}://${req.get('host')}`;
+const getBaseUrl = (req) => {
+  const proto = req.get('x-forwarded-proto') || req.protocol;
+  return `${proto}://${req.get('host')}`;
+};
 const getUploadedFile = (req) => req.file || req.files?.image?.[0] || req.files?.file?.[0] || null;
 const isImage = (filename = '') => /\.(jpg|jpeg|png|gif|webp)$/i.test(filename);
 const sanitizeFileName = (name = 'file') => name.replace(/[^a-zA-Z0-9._-]/g, '_');

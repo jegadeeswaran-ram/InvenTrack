@@ -5,7 +5,7 @@ import 'package:provider/provider.dart';
 import '../../main.dart';
 import '../../services/auth_service.dart';
 import '../../services/api_service.dart';
-import '../../widgets/app_drawer.dart';
+import 'admin_shell.dart';
 
 class MediaScreen extends StatefulWidget {
   const MediaScreen({super.key});
@@ -185,16 +185,16 @@ class _MediaScreenState extends State<MediaScreen> with TickerProviderStateMixin
     final cs = Theme.of(context).colorScheme;
     final isDark = context.watch<ThemeNotifier>().isDark;
     return Scaffold(
-      drawer: const AppDrawer(),
       appBar: AppBar(
         title: const Text('Media'),
-        leading: Builder(builder: (ctx) => IconButton(icon: const Icon(Icons.menu_rounded), onPressed: () => Scaffold.of(ctx).openDrawer())),
+        leading: IconButton(icon: const Icon(Icons.menu_rounded), onPressed: () => ShellScope.of(context)?.scaffoldKey.currentState?.openDrawer()),
         actions: [
           IconButton(icon: Icon(isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined), onPressed: () => context.read<ThemeNotifier>().toggle()),
           IconButton(icon: const Icon(Icons.refresh_outlined), onPressed: _load),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'fab_media',
         onPressed: _uploading ? null : _pickAndUpload,
         backgroundColor: const Color(0xFF0097A7),
         elevation: 4,

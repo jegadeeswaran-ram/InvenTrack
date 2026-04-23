@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="60 0 200 80">
+  <defs>
+    <linearGradient id="Blue" x1="2059.26" y1="-829.27" x2="2213.5" y2="-829.27" gradientTransform="translate(894.78 -873.01) rotate(150.6) scale(.52 .51)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2bc4f3"/><stop offset=".5" stop-color="#00aeee"/><stop offset="1" stop-color="#0095da"/>
+    </linearGradient>
+    <linearGradient id="Blue2" x1="2192.46" y1="-725.97" x2="2078.21" y2="-802.47" xlink:href="#Blue"/>
+    <linearGradient id="Green" x1="2157.15" y1="-874.53" x2="1870.04" y2="-868.57" gradientTransform="translate(894.78 -873.01) rotate(150.6) scale(.52 .51)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#00d49d"/><stop offset=".5" stop-color="#00d09d"/><stop offset="1" stop-color="#0090a1"/>
+    </linearGradient>
+    <linearGradient id="Green2" x1="1972.62" y1="-933.71" x2="2139.83" y2="-933.71" gradientTransform="translate(894.78 -873.01) rotate(150.6) scale(.52 .51)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#64c08a"/><stop offset=".5" stop-color="#00a550"/><stop offset="1" stop-color="#006837"/>
+    </linearGradient>
+  </defs>
+  <polygon fill="url(#Blue)" fill-rule="evenodd" points="143.5 59.42 156.36 38.04 169.27 16.77 159.83 0 146.91 21.28 134.05 42.65 117.76 42.58 120.04 32.69 93.98 46.22 111.65 68.5 113.81 59.32 143.5 59.42"/>
+  <polygon fill="url(#Blue2)" fill-rule="evenodd" points="70.7 18.62 149.44 17.16 159.83 0 104.69 1.01 70.7 18.62"/>
+  <polygon fill="url(#Green)" fill-rule="evenodd" points="172.19 18.73 159.33 40.11 146.41 61.39 155.86 78.15 168.72 56.78 181.64 35.5 197.93 35.57 195.64 45.46 221.81 31.88 204.04 9.65 201.87 18.84 172.19 18.73"/>
+  <polygon fill="url(#Green2)" fill-rule="evenodd" points="244.99 59.53 166.25 61 155.86 78.15 210.94 77.04 244.99 59.53"/>
+</svg>

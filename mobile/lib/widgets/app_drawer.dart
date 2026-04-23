@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'inventrack_logo.dart';
 import '../main.dart';
 import '../services/auth_service.dart';
 import '../screens/admin/dashboard_screen.dart';
@@ -7,6 +9,7 @@ import '../screens/admin/reports_screen.dart';
 import '../screens/admin/products_screen.dart';
 import '../screens/admin/media_screen.dart';
 import '../screens/admin/users_screen.dart';
+import '../screens/admin/profile_screen.dart';
 
 class AppDrawer extends StatelessWidget {
   const AppDrawer({super.key});
@@ -20,9 +23,9 @@ class AppDrawer extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final isDark = context.watch<ThemeNotifier>().isDark;
-    final user = context.read<AuthService>().user;
+    final user = context.watch<AuthService>().user;
     final name = user?.name ?? 'Admin';
-    final email = user?.username ?? '';
+    final email = user?.email.isNotEmpty == true ? user!.email : (user?.username ?? '');
 
     return Drawer(
       backgroundColor: cs.surface,
@@ -38,14 +41,24 @@ class AppDrawer extends StatelessWidget {
                 borderRadius: BorderRadius.only(bottomRight: Radius.circular(20)),
               ),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                CircleAvatar(
-                  radius: 28,
-                  backgroundColor: Colors.white.withOpacity(0.2),
-                  child: Text(name.isNotEmpty ? name.substring(0, 1).toUpperCase() : 'A', style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w700)),
+                const InvenTrackLogo(width: 140, textColor: Colors.white),
+                const SizedBox(height: 14),
+                // Avatar with photo support
+                GestureDetector(
+                  onTap: () => _go(context, const ProfileScreen()),
+                  child: CircleAvatar(
+                    radius: 26,
+                    backgroundColor: Colors.white.withValues(alpha: 0.2),
+                    backgroundImage: user?.photo != null ? MemoryImage(base64Decode(user!.photo!)) : null,
+                    child: user?.photo == null
+                        ? Text(name.isNotEmpty ? name[0].toUpperCase() : 'A',
+                            style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w700))
+                        : null,
+                  ),
                 ),
-                const SizedBox(height: 10),
-                Text(name, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
-                Text(email, style: TextStyle(color: Colors.white.withOpacity(0.75), fontSize: 12)),
+                const SizedBox(height: 8),
+                Text(name, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700)),
+                Text(email, style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 12)),
               ]),
             ),
             const SizedBox(height: 8),
@@ -58,13 +71,14 @@ class AppDrawer extends StatelessWidget {
                   _tile(context, icon: Icons.sell_outlined, label: 'Products', onTap: () => _go(context, const ProductsScreen())),
                   _tile(context, icon: Icons.photo_library_outlined, label: 'Media', onTap: () => _go(context, const MediaScreen())),
                   _tile(context, icon: Icons.people_outline_rounded, label: 'Users', onTap: () => _go(context, const UsersScreen())),
+                  _tile(context, icon: Icons.manage_accounts_outlined, label: 'My Profile', onTap: () => _go(context, const ProfileScreen())),
                 ],
               ),
             ),
-            Divider(color: cs.onSurface.withOpacity(0.08)),
+            Divider(color: cs.onSurface.withValues(alpha: 0.08)),
             // Theme toggle
             ListTile(
-              leading: Icon(isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined, color: cs.onSurface.withOpacity(0.6)),
+              leading: Icon(isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined, color: cs.onSurface.withValues(alpha: 0.6)),
               title: Text(isDark ? 'Light Mode' : 'Dark Mode', style: TextStyle(color: cs.onSurface, fontSize: 14)),
               onTap: () => context.read<ThemeNotifier>().toggle(),
             ),

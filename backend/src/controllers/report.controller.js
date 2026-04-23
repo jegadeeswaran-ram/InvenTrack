@@ -11,11 +11,11 @@ const dailyReport = async (req, res) => {
   const [purchases, sales] = await Promise.all([
     prisma.purchase.findMany({
       where: { date: { gte: start, lt: end } },
-      include: { product: { select: { id: true, name: true, emoji: true, imageUrl: true } } },
+      include: { product: { select: { id: true, name: true, emoji: true, imageUrl: true, costPerUnit: true, piecesPerPacket: true } } },
     }),
     prisma.sale.findMany({
       where: { date: { gte: start, lt: end } },
-      include: { product: { select: { id: true, name: true, emoji: true, imageUrl: true } } },
+      include: { product: { select: { id: true, name: true, emoji: true, imageUrl: true, costPerUnit: true, piecesPerPacket: true } } },
     }),
   ]);
 

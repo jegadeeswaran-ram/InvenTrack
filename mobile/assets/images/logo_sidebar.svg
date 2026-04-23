@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_2" data-name="Layer 2" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 450.37 84.23">
+  <defs>
+    <style>
+      .cls-1 { fill: url(#linear-gradient-2); }
+      .cls-1, .cls-2, .cls-3, .cls-4 { fill-rule: evenodd; }
+      .cls-2 { fill: url(#Blue-2); }
+      .cls-5 { fill: #066789; }
+      .cls-5, .cls-6 { font-family: Arial-Black, 'Arial Black'; font-size: 59.05px; font-weight: 800; }
+      .cls-6 { fill: #0095da; }
+      .cls-3 { fill: url(#linear-gradient); }
+      .cls-4 { fill: url(#Blue); }
+      .cls-7 { letter-spacing: -.02em; }
+    </style>
+    <linearGradient id="Blue" x1="852.97" y1="-1468.31" x2="1007.21" y2="-1468.31" gradientTransform="translate(171.79 -848.74) rotate(150.6) scale(.52 .51)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2bc4f3"/><stop offset=".5" stop-color="#00aeee"/><stop offset="1" stop-color="#0095da"/>
+    </linearGradient>
+    <linearGradient id="Blue-2" data-name="Blue" x1="986.17" y1="-1365.02" x2="871.92" y2="-1441.52" xlink:href="#Blue"/>
+    <linearGradient id="linear-gradient" x1="950.86" y1="-1513.58" x2="663.75" y2="-1507.62" gradientTransform="translate(171.79 -848.74) rotate(150.6) scale(.52 .51)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#00d49d"/><stop offset=".5" stop-color="#00d09d"/><stop offset="1" stop-color="#0090a1"/>
+    </linearGradient>
+    <linearGradient id="linear-gradient-2" x1="766.32" y1="-1572.76" x2="933.54" y2="-1572.76" gradientTransform="translate(171.79 -848.74) rotate(150.6) scale(.52 .51)" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#64c08a"/><stop offset=".5" stop-color="#00a550"/><stop offset="1" stop-color="#006837"/>
+    </linearGradient>
+  </defs>
+  <g id="_6" data-name="6">
+    <g>
+      <g>
+        <polygon class="cls-4" points="125.5 59.42 138.36 38.04 151.27 16.77 141.83 0 128.91 21.28 116.05 42.65 99.76 42.58 102.04 32.69 75.98 46.22 93.65 68.5 95.81 59.32 125.5 59.42"/>
+        <polygon class="cls-2" points="52.7 18.62 131.44 17.16 141.83 0 86.69 1.01 52.7 18.62"/>
+        <polygon class="cls-3" points="154.19 18.73 141.33 40.11 128.41 61.39 137.86 78.15 150.72 56.78 163.64 35.5 179.93 35.57 177.64 45.46 203.81 31.88 186.04 9.65 183.87 18.84 154.19 18.73"/>
+        <polygon class="cls-1" points="226.99 59.53 148.25 61 137.86 78.15 192.94 77.04 226.99 59.53"/>
+      </g>
+      <text class="cls-6" transform="translate(0 66.12)"><tspan x="0" y="0">IN</tspan></text>
+      <text class="cls-5" transform="translate(221.82 66.12)"><tspan x="0" y="0">TR</tspan><tspan class="cls-7" x="88.57" y="0">A</tspan><tspan x="133.43" y="0">CK</tspan></text>
+    </g>
+  </g>
+</svg>

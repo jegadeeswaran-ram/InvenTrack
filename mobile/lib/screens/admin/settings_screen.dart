@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import '../../main.dart';
 import '../../services/auth_service.dart';
 import '../../services/api_service.dart';
-import '../../widgets/app_drawer.dart';
+import 'admin_shell.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -143,10 +143,9 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
   Widget build(BuildContext context) {
     final isDark = context.watch<ThemeNotifier>().isDark;
     return Scaffold(
-      drawer: const AppDrawer(),
       appBar: AppBar(
         title: const Text('Settings'),
-        leading: Builder(builder: (ctx) => IconButton(icon: const Icon(Icons.menu_rounded), onPressed: () => Scaffold.of(ctx).openDrawer())),
+        leading: IconButton(icon: const Icon(Icons.menu_rounded), onPressed: () => ShellScope.of(context)?.scaffoldKey.currentState?.openDrawer()),
         actions: [
           IconButton(
             icon: Icon(isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined),
@@ -162,6 +161,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
         ),
       ),
       floatingActionButton: FloatingActionButton(
+        heroTag: 'fab_settings',
         onPressed: () => _tabs.index == 0 ? _showAddProduct() : _showAddUser(),
         backgroundColor: const Color(0xFF0097A7),
         child: const Icon(Icons.add, color: Colors.white),

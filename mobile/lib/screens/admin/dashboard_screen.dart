@@ -5,8 +5,8 @@ import 'package:provider/provider.dart';
 import '../../main.dart';
 import '../../services/auth_service.dart';
 import '../../services/api_service.dart';
-import '../../widgets/app_drawer.dart';
 import '../login_screen.dart';
+import 'admin_shell.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -122,10 +122,9 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     ];
 
     return Scaffold(
-      drawer: const AppDrawer(),
       appBar: AppBar(
         title: const Text('Dashboard'),
-        leading: Builder(builder: (ctx) => IconButton(icon: const Icon(Icons.menu_rounded), onPressed: () => Scaffold.of(ctx).openDrawer())),
+        leading: IconButton(icon: const Icon(Icons.menu_rounded), onPressed: () => ShellScope.of(context)?.scaffoldKey.currentState?.openDrawer()),
         actions: [
           IconButton(
             icon: Icon(themeNotifier.isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined),
@@ -199,7 +198,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                         children: _stock.asMap().entries.map((e) {
                           final i = e.key;
                           final p = e.value;
-                          final delay = i * 0.1;
+                          final delay = (i * 0.1).clamp(0.0, 0.9);
                           final anim = CurvedAnimation(
                             parent: _listCtrl,
                             curve: Interval(delay, math.min(delay + 0.5, 1.0), curve: Curves.easeOut),
@@ -227,10 +226,10 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                           children: todaySales.asMap().entries.map((e) {
                             final i = e.key;
                             final s = e.value;
-                            final delay = 0.3 + i * 0.1;
+                            final delay = (0.3 + i * 0.1).clamp(0.0, 0.9);
                             final anim = CurvedAnimation(
                               parent: _listCtrl,
-                              curve: Interval(delay.clamp(0.0, 1.0), math.min(delay + 0.5, 1.0), curve: Curves.easeOut),
+                              curve: Interval(delay, math.min(delay + 0.5, 1.0), curve: Curves.easeOut),
                             );
                             final profit = (s['profit'] as num).toDouble();
                             return Transform.translate(

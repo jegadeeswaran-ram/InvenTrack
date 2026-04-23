@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../main.dart';
 import '../services/auth_service.dart';
-import 'sales_entry_screen.dart';
+import '../widgets/inventrack_logo.dart';
+import 'sales_user_shell.dart';
 import 'admin/admin_shell.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -29,7 +30,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (auth.isAdmin) {
         Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const AdminShell()));
       } else {
-        Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const SalesEntryScreen()));
+        Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const SalesUserShell()));
       }
     } catch (e) {
       setState(() { _error = e.toString(); });
@@ -58,15 +59,7 @@ class _LoginScreenState extends State<LoginScreen> {
             padding: const EdgeInsets.all(28),
             child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
               // Logo
-              Container(
-                width: 80, height: 80,
-                decoration: BoxDecoration(color: cs.primary, borderRadius: BorderRadius.circular(22),
-                  boxShadow: [BoxShadow(color: cs.primary.withOpacity(0.4), blurRadius: 20, offset: const Offset(0, 8))]),
-                child: const Icon(Icons.inventory_2_outlined, color: Colors.white, size: 38),
-              ),
-              const SizedBox(height: 16),
-              const Text('Kulfi ICE', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: Colors.white)),
-              const Text('INVENTRACK', style: TextStyle(color: Color(0xFF6B8A9E), letterSpacing: 3, fontSize: 11)),
+              const InvenTrackLogo(width: 280, textColor: Colors.white),
               const SizedBox(height: 36),
 
               // Card
