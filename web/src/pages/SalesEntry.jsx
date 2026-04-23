@@ -17,25 +17,42 @@ function Modal({ title, onClose, children }) {
   );
 }
 
+function packetLabel(product) {
+  if (!product) return 'Packets';
+  const n = product.name || '';
+  if (n.includes('Stick')) return 'Packets (1 pkt = 6 pcs)';
+  if (n.includes('Plate')) return 'Packets (1 pkt = 16 pcs)';
+  if (n.includes('Pot'))   return 'Boxes (1 box = 12 pcs)';
+  return `Packets (1 pkt = ${product.piecesPerPacket ?? 1} pcs)`;
+}
+
+function packetsDisplay(item) {
+  const qty = item.quantity;
+  const ppc = item.product?.piecesPerPacket ?? 1;
+  if (ppc <= 1) return `${qty} pcs`;
+  const pkts = qty / ppc;
+  return `${Number.isInteger(pkts) ? pkts : pkts.toFixed(1)} pkts (${qty} pcs)`;
+}
+
 export default function SalesEntry() {
   const [products, setProducts] = useState([]);
-  const [sales, setSales] = useState([]);
+  const [sales, setSales]       = useState([]);
   const [dateFilter, setDateFilter] = useState('');
   const [form, setForm] = useState({ date: today(), productId: '', quantity: '', pricePerUnit: '', notes: '' });
-  const [msg, setMsg] = useState({ type: '', text: '' });
+  const [msg, setMsg]   = useState({ type: '', text: '' });
   const [loading, setLoading] = useState(false);
 
-  const [viewItem, setViewItem] = useState(null);
-  const [editItem, setEditItem] = useState(null);
-  const [editForm, setEditForm] = useState({});
-  const [editMsg, setEditMsg] = useState({ type: '', text: '' });
+  const [viewItem, setViewItem]   = useState(null);
+  const [editItem, setEditItem]   = useState(null);
+  const [editForm, setEditForm]   = useState({});
+  const [editMsg, setEditMsg]     = useState({ type: '', text: '' });
   const [editLoading, setEditLoading] = useState(false);
 
-  const totalRevenue = form.quantity && form.pricePerUnit
-    ? (parseFloat(form.quantity) * parseFloat(form.pricePerUnit)).toFixed(2) : '0.00';
+  const pieces = parseFloat(form.quantity) || 0;
+  const totalRevenue = pieces && form.pricePerUnit ? (pieces * parseFloat(form.pricePerUnit)).toFixed(2) : '0.00';
 
-  const editRevenue = editForm.quantity && editForm.pricePerUnit
-    ? (parseFloat(editForm.quantity) * parseFloat(editForm.pricePerUnit)).toFixed(2) : '0.00';
+  const editPieces  = parseFloat(editForm.quantity) || 0;
+  const editRevenue = editPieces && editForm.pricePerUnit ? (editPieces * parseFloat(editForm.pricePerUnit)).toFixed(2) : '0.00';
 
   useEffect(() => {
     api.get('/products').then(r => setProducts(r.data));
@@ -45,8 +62,7 @@ export default function SalesEntry() {
   }, []);
 
   const loadSales = async (date = '') => {
-    const url = date ? `/sales?date=${date}` : '/sales';
-    const r = await api.get(url);
+    const r = await api.get(date ? `/sales?date=${date}` : '/sales');
     setSales(r.data);
   };
 
@@ -55,7 +71,13 @@ export default function SalesEntry() {
     setMsg({ type: '', text: '' });
     setLoading(true);
     try {
-      await api.post('/sales', { ...form, quantity: parseFloat(form.quantity), pricePerUnit: parseFloat(form.pricePerUnit) });
+      await api.post('/sales', {
+        date: form.date,
+        productId: parseInt(form.productId),
+        quantity: parseFloat(form.quantity),
+        pricePerUnit: parseFloat(form.pricePerUnit),
+        notes: form.notes || null,
+      });
       setMsg({ type: 'success', text: 'Sale entry saved!' });
       setForm({ date: today(), productId: '', quantity: '', pricePerUnit: '', notes: '' });
       loadSales(dateFilter);
@@ -83,7 +105,13 @@ export default function SalesEntry() {
     setEditLoading(true);
     setEditMsg({ type: '', text: '' });
     try {
-      await api.put(`/sales/${editItem.id}`, { ...editForm, quantity: parseFloat(editForm.quantity), pricePerUnit: parseFloat(editForm.pricePerUnit) });
+      await api.put(`/sales/${editItem.id}`, {
+        date: editForm.date,
+        productId: parseInt(editForm.productId),
+        quantity: parseFloat(editForm.quantity),
+        pricePerUnit: parseFloat(editForm.pricePerUnit),
+        notes: editForm.notes || null,
+      });
       setEditMsg({ type: 'success', text: 'Updated!' });
       setEditItem(null);
       loadSales(dateFilter);
@@ -119,21 +147,23 @@ export default function SalesEntry() {
               <label>Product</label>
               <select value={form.productId} onChange={e => {
                 const p = products.find(p => String(p.id) === e.target.value);
-                setForm({ ...form, productId: e.target.value, pricePerUnit: p ? String(p.sellingPrice) : form.pricePerUnit });
+                setForm({ ...form, productId: e.target.value, quantity: '', pricePerUnit: p ? String(p.sellingPrice) : form.pricePerUnit });
               }} required>
                 <option value="">Select product…</option>
                 {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
             </div>
             <div className="form-group">
-              <label>Units Sold</label>
-              <input type="number" min="0" step="any" placeholder="0" value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} required />
+              <label>Pieces</label>
+              <input type="number" min="0" step="any" placeholder="0" value={form.quantity}
+                onChange={e => setForm({ ...form, quantity: e.target.value })} required />
             </div>
           </div>
           <div className="form-row cols-3">
             <div className="form-group">
-              <label>Price per Unit (₹)</label>
-              <input type="number" min="0" step="any" placeholder="0.00" value={form.pricePerUnit} onChange={e => setForm({ ...form, pricePerUnit: e.target.value })} required />
+              <label>Price per Piece (₹)</label>
+              <input type="number" min="0" step="any" placeholder="0.00" value={form.pricePerUnit}
+                onChange={e => setForm({ ...form, pricePerUnit: e.target.value })} required />
             </div>
             <div className="form-group">
               <label>Total Revenue</label>
@@ -163,7 +193,7 @@ export default function SalesEntry() {
         ) : (
           <table>
             <thead>
-              <tr><th>Date</th><th>Product</th><th>Sold by</th><th>Qty</th><th>Price/Unit</th><th>Revenue</th><th>Profit</th><th>Actions</th></tr>
+              <tr><th>Date</th><th>Product</th><th>Sold by</th><th>Pieces</th><th>Price/Pc</th><th>Revenue</th><th>Profit</th><th>Actions</th></tr>
             </thead>
             <tbody>
               {sales.map(s => (
@@ -189,25 +219,24 @@ export default function SalesEntry() {
         )}
       </div>
 
-      {/* View Modal */}
       {viewItem && (
         <Modal title="Sale Details" onClose={() => setViewItem(null)}>
           <table style={{ width: '100%' }}>
             <tbody>
               {[
-                ['Date', new Date(viewItem.date).toLocaleDateString('en-IN')],
-                ['Product', viewItem.product?.name],
-                ['Sold By', viewItem.user?.name],
-                ['Quantity', viewItem.quantity],
-                ['Price per Unit', `₹${viewItem.pricePerUnit}`],
+                ['Date',          new Date(viewItem.date).toLocaleDateString('en-IN')],
+                ['Product',       viewItem.product?.name],
+                ['Sold By',       viewItem.user?.name],
+                ['Pieces',        viewItem.quantity],
+                ['Price per Piece', `₹${viewItem.pricePerUnit}`],
                 ['Total Revenue', `₹${viewItem.totalRevenue.toFixed(2)}`],
-                ['Avg Cost Unit', `₹${viewItem.avgCostUnit?.toFixed(2)}`],
-                ['Profit', `₹${viewItem.profit?.toFixed(2)}`],
-                ['Notes', viewItem.notes || '—'],
-                ['Created', new Date(viewItem.createdAt).toLocaleString('en-IN')],
+                ['Avg Cost/Pc',   `₹${viewItem.avgCostUnit?.toFixed(2)}`],
+                ['Profit',        `₹${viewItem.profit?.toFixed(2)}`],
+                ['Notes',         viewItem.notes || '—'],
+                ['Created',       new Date(viewItem.createdAt).toLocaleString('en-IN')],
               ].map(([k, v]) => (
                 <tr key={k}>
-                  <td style={{ padding: '8px 12px 8px 0', color: 'var(--text-muted)', width: 140, verticalAlign: 'top' }}>{k}</td>
+                  <td style={{ padding: '8px 12px 8px 0', color: 'var(--text-muted)', width: 150, verticalAlign: 'top' }}>{k}</td>
                   <td style={{ padding: '8px 0', fontWeight: 500 }}>{v}</td>
                 </tr>
               ))}
@@ -219,7 +248,6 @@ export default function SalesEntry() {
         </Modal>
       )}
 
-      {/* Edit Modal */}
       {editItem && (
         <Modal title="Edit Sale" onClose={() => setEditItem(null)}>
           <form onSubmit={handleEditSubmit}>
@@ -240,12 +268,14 @@ export default function SalesEntry() {
             </div>
             <div className="form-row cols-3">
               <div className="form-group">
-                <label>Quantity</label>
-                <input type="number" min="0" step="any" value={editForm.quantity} onChange={e => setEditForm({ ...editForm, quantity: e.target.value })} required />
+                <label>Pieces</label>
+                <input type="number" min="0" step="any" value={editForm.quantity}
+                  onChange={e => setEditForm({ ...editForm, quantity: e.target.value })} required />
               </div>
               <div className="form-group">
-                <label>Price per Unit (₹)</label>
-                <input type="number" min="0" step="any" value={editForm.pricePerUnit} onChange={e => setEditForm({ ...editForm, pricePerUnit: e.target.value })} required />
+                <label>Price per Piece (₹)</label>
+                <input type="number" min="0" step="any" value={editForm.pricePerUnit}
+                  onChange={e => setEditForm({ ...editForm, pricePerUnit: e.target.value })} required />
               </div>
               <div className="form-group">
                 <label>Total Revenue</label>

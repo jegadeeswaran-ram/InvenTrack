@@ -230,20 +230,23 @@ class _SalesEntryScreenState extends State<SalesEntryScreen> with TickerProvider
                       const SizedBox(height: 18),
 
                       // Date
-                      InkWell(
-                        onTap: () async {
-                          final d = await showDatePicker(context: context, initialDate: _date, firstDate: DateTime(2020), lastDate: DateTime.now());
-                          if (d != null) {
-                            _dismissMsgOnEdit();
-                            setState(() => _date = d);
-                          }
-                        },
-                        borderRadius: BorderRadius.circular(10),
-                        child: InputDecorator(
-                          decoration: const InputDecoration(labelText: 'Date', prefixIcon: Icon(Icons.calendar_today_outlined)),
-                          child: Text(
-                            DateFormat('dd MMM yyyy').format(_date),
-                            style: TextStyle(color: cs.onSurface),
+                      Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () async {
+                            final d = await showDatePicker(context: context, initialDate: _date, firstDate: DateTime(2020), lastDate: DateTime.now());
+                            if (d != null) {
+                              _dismissMsgOnEdit();
+                              setState(() => _date = d);
+                            }
+                          },
+                          borderRadius: BorderRadius.circular(10),
+                          child: InputDecorator(
+                            decoration: const InputDecoration(labelText: 'Date', prefixIcon: Icon(Icons.calendar_today_outlined)),
+                            child: Text(
+                              DateFormat('dd MMM yyyy').format(_date),
+                              style: TextStyle(color: cs.onSurface),
+                            ),
                           ),
                         ),
                       ),

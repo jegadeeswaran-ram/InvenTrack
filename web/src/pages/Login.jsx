@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
@@ -9,6 +9,13 @@ export default function Login() {
   const [form, setForm] = useState({ username: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') === 'dark');
+
+  useEffect(() => {
+    const onStorage = () => setIsDark(localStorage.getItem('theme') === 'dark');
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -32,9 +39,12 @@ export default function Login() {
     }}>
       <div className="card" style={{ width: 360, padding: 36 }}>
         <div style={{ textAlign: 'center', marginBottom: 28 }}>
-          <div style={{ fontSize: 48 }}>🍦</div>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--primary)', marginTop: 8 }}>Kulfi ICE</h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 4 }}>InvenTrack — Admin Panel</p>
+          <img
+            src={isDark ? '/logo_dark_theme.svg' : '/logo_light_theme.svg'}
+            alt="InvenTrack"
+            style={{ width: 220, margin: '0 auto 8px', display: 'block' }}
+          />
+          <p style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 4 }}>Admin Panel</p>
         </div>
 
         <form onSubmit={handleSubmit}>

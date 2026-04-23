@@ -1,10 +1,11 @@
 const prisma = require('../config/db');
 
+const PRODUCT_SELECT = { id: true, name: true, emoji: true, imageUrl: true, costPerUnit: true, piecesPerPacket: true };
+
 const getSales = async (req, res) => {
   const { date } = req.query;
   let where = {};
 
-  // SALES role can only see their own entries
   if (req.user.role !== 'ADMIN') {
     where.userId = req.user.id;
   }
@@ -19,7 +20,7 @@ const getSales = async (req, res) => {
   const sales = await prisma.sale.findMany({
     where,
     include: {
-      product: { select: { id: true, name: true, emoji: true, imageUrl: true } },
+      product: { select: PRODUCT_SELECT },
       user: { select: { id: true, name: true, username: true } },
     },
     orderBy: { date: 'desc' },
@@ -30,15 +31,16 @@ const getSales = async (req, res) => {
 const createSale = async (req, res) => {
   const { date, productId, quantity, pricePerUnit, notes } = req.body;
 
-  if (!date || !productId || quantity == null || pricePerUnit == null) {
-    return res.status(400).json({ message: 'date, productId, quantity, pricePerUnit are required' });
+  if (!date || !productId || pricePerUnit == null) {
+    return res.status(400).json({ message: 'date, productId, pricePerUnit are required' });
   }
 
-  const qty = parseFloat(quantity);
+  const qty = parseFloat(quantity) || 0;
+  if (qty <= 0) return res.status(400).json({ message: 'quantity is required and must be > 0' });
+
   const price = parseFloat(pricePerUnit);
   const totalRevenue = qty * price;
 
-  // Compute average cost from all purchases for this product
   const purchases = await prisma.purchase.findMany({
     where: { productId: parseInt(productId) },
     select: { costPerUnit: true },
@@ -64,7 +66,7 @@ const createSale = async (req, res) => {
       notes: notes || null,
     },
     include: {
-      product: { select: { id: true, name: true, emoji: true, imageUrl: true } },
+      product: { select: PRODUCT_SELECT },
       user: { select: { id: true, name: true, username: true } },
     },
   });
@@ -74,7 +76,8 @@ const createSale = async (req, res) => {
 const updateSale = async (req, res) => {
   const { id } = req.params;
   const { date, productId, quantity, pricePerUnit, notes } = req.body;
-  const qty = parseFloat(quantity);
+
+  const qty = parseFloat(quantity) || 0;
   const price = parseFloat(pricePerUnit);
   const totalRevenue = qty * price;
 
@@ -98,7 +101,7 @@ const updateSale = async (req, res) => {
       notes: notes || null,
     },
     include: {
-      product: { select: { id: true, name: true, emoji: true, imageUrl: true } },
+      product: { select: PRODUCT_SELECT },
       user: { select: { id: true, name: true, username: true } },
     },
   });

@@ -12,6 +12,7 @@ import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import Products from './pages/Products';
 import Media from './pages/Media';
+import Profile from './pages/Profile';
 
 function AppRoutes() {
   const { token, isAuthReady } = useAuth();
@@ -29,6 +30,7 @@ function AppRoutes() {
       <Route path="/products" element={<ProtectedRoute><Layout><Products /></Layout></ProtectedRoute>} />
       <Route path="/media" element={<ProtectedRoute><Layout><Media /></Layout></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><Layout><Settings /></Layout></ProtectedRoute>} />
+      <Route path="/profile" element={<ProtectedRoute><Layout><Profile /></Layout></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

@@ -34,10 +34,41 @@ const login = async (req, res) => {
 const me = async (req, res) => {
   const user = await prisma.user.findUnique({
     where: { id: req.user.id },
-    select: { id: true, name: true, username: true, role: true, isActive: true },
+    select: { id: true, name: true, username: true, email: true, photo: true, role: true, isActive: true },
   });
   if (!user) return res.status(404).json({ message: 'User not found' });
   return res.json(user);
 };
 
-module.exports = { login, me };
+const updateProfile = async (req, res) => {
+  const { name, username, email, password, photo } = req.body;
+  const userId = req.user.id;
+
+  // Check username uniqueness if changing
+  if (username) {
+    const existing = await prisma.user.findUnique({ where: { username } });
+    if (existing && existing.id !== userId) {
+      return res.status(400).json({ message: 'Username already taken' });
+    }
+  }
+
+  const data = {};
+  if (name !== undefined) data.name = name;
+  if (username !== undefined) data.username = username;
+  if (email !== undefined) data.email = email;
+  if (photo !== undefined) data.photo = photo;
+  if (password) {
+    if (password.length < 6) return res.status(400).json({ message: 'Password must be at least 6 characters' });
+    data.password = await bcrypt.hash(password, 10);
+  }
+
+  const updated = await prisma.user.update({
+    where: { id: userId },
+    data,
+    select: { id: true, name: true, username: true, email: true, photo: true, role: true },
+  });
+
+  return res.json(updated);
+};
+
+module.exports = { login, me, updateProfile };

@@ -55,6 +55,7 @@ class KulfiICEApp extends StatelessWidget {
       titleTextStyle: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: Colors.white),
     ),
     cardTheme: CardThemeData(
+      
       color: Colors.white,
       elevation: 0,
       
