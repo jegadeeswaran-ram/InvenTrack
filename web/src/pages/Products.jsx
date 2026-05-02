@@ -1,238 +1,324 @@
 import { useState, useEffect, useRef } from 'react';
-import { Search, Plus, Edit, Trash2, Upload, X, ImageOff } from 'lucide-react';
-import { getProducts, createProduct, updateProduct, deleteProduct } from '../api/endpoints/products';
-import useStore from '../store/useStore';
-import Button from '../components/ui/Button';
-import Input, { Select } from '../components/ui/Input';
-import Modal from '../components/ui/Modal';
-import Table from '../components/ui/Table';
-import { StatusBadge } from '../components/ui/Badge';
+import api from '../api/axios';
 
-const CATEGORIES = ['Kulfi', 'Special', 'Premium', 'Box', 'Other'];
-const MAX_SIZE   = 2 * 1024 * 1024;
+const EMOJIS = ['🍦', '🍡', '🪔', '🍨', '🫙', '👑', '🥤', '🧁', '🍧', '🍰'];
 
-const emptyForm = {
-  name: '', category: '', sku: '', price: '', costPrice: '',
-  unit: 'PCS', openingStock: 0, minStockAlert: 5, description: '', isActive: true,
-};
+function ProductImage({ imageUrl, size = 80 }) {
+  const [err, setErr] = useState(false);
+  if (imageUrl && !err) {
+    return (
+      <img
+        src={imageUrl}
+        alt=""
+        onError={() => setErr(true)}
+        style={{ width: size, height: size, objectFit: 'contain', borderRadius: 8 }}
+      />
+    );
+  }
+  return (
+    <div style={{ width: size, height: size, borderRadius: 8, background: 'var(--th-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <svg width={size * 0.4} height={size * 0.4} viewBox="0 0 24 24" fill="none" stroke="#ccc" strokeWidth="1.5">
+        <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>
+      </svg>
+    </div>
+  );
+}
 
 export default function Products() {
-  const { user, addToast } = useStore();
   const [products, setProducts] = useState([]);
-  const [loading, setLoading]   = useState(true);
-  const [search, setSearch]     = useState('');
-  const [category, setCategory] = useState('');
-  const [modal, setModal]       = useState(false);
-  const [editing, setEditing]   = useState(null);
-  const [form, setForm]         = useState(emptyForm);
-  const [imageFile, setImageFile]     = useState(null);
-  const [imagePreview, setPreview]    = useState(null);
-  const [imageError, setImageError]   = useState('');
-  const [submitting, setSubmitting]   = useState(false);
-  const [formErrors, setFormErrors]   = useState({});
-  const fileRef = useRef();
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [editProduct, setEditProduct] = useState(null);
+  const [form, setForm] = useState({ name: '', emoji: '🍦', sellingPrice: '', imageUrl: '' });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
-  const load = async () => {
-    setLoading(true);
-    try {
-      const params = {};
-      if (search)   params.search   = search;
-      if (category) params.category = category;
-      const r = await getProducts({ ...params, limit: 100 });
-      setProducts(r.data.data || []);
-    } finally { setLoading(false); }
+  const [showMediaPicker, setShowMediaPicker] = useState(false);
+  const [mediaList, setMediaList] = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const [recentMedia, setRecentMedia] = useState([]);
+  const fileInputRef = useRef();
+  const inlineFileRef = useRef();
+
+  const fetchProducts = () => {
+    api.get('/products').then(r => { setProducts(r.data); setLoading(false); });
   };
 
-  useEffect(() => { load(); }, [search, category]);
+  useEffect(() => { fetchProducts(); }, []);
+
+  const loadRecentMedia = () => {
+    api.get('/media').then(r => setRecentMedia(r.data.slice(0, 12)));
+  };
 
   const openAdd = () => {
-    setEditing(null); setForm(emptyForm);
-    setImageFile(null); setPreview(null); setImageError('');
-    setFormErrors({}); setModal(true);
+    setEditProduct(null);
+    setForm({ name: '', emoji: '🍦', sellingPrice: '', imageUrl: '' });
+    setError('');
+    loadRecentMedia();
+    setShowForm(true);
   };
 
   const openEdit = (p) => {
-    setEditing(p);
-    setForm({ name: p.name, category: p.category, sku: p.sku, price: p.price, costPrice: p.costPrice,
-              unit: p.unit, openingStock: p.openingStock, minStockAlert: p.minStockAlert,
-              description: p.description || '', isActive: p.isActive });
-    setImageFile(null); setPreview(p.imageUrl || null); setImageError('');
-    setFormErrors({}); setModal(true);
+    setEditProduct(p);
+    setForm({ name: p.name, emoji: p.emoji, sellingPrice: String(p.sellingPrice), imageUrl: p.imageUrl || '' });
+    loadRecentMedia();
+    setError('');
+    setShowForm(true);
   };
 
-  const handleFile = (file) => {
-    setImageError('');
-    if (!file) return;
-    if (!['image/jpeg','image/png','image/webp'].includes(file.type)) {
-      return setImageError('Only JPEG, PNG, WebP allowed');
-    }
-    if (file.size > MAX_SIZE) return setImageError('Image must be under 2MB');
-    setImageFile(file);
-    setPreview(URL.createObjectURL(file));
-  };
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!form.name.trim()) return setError('Product name is required');
+    if (!form.sellingPrice || isNaN(form.sellingPrice) || Number(form.sellingPrice) <= 0)
+      return setError('Enter a valid selling price');
 
-  const validate = () => {
-    const e = {};
-    if (!form.name)     e.name     = 'Name is required';
-    if (!form.category) e.category = 'Category is required';
-    if (!form.sku)      e.sku      = 'SKU is required';
-    if (form.price === '') e.price  = 'Price is required';
-    if (form.costPrice === '') e.costPrice = 'Cost price is required';
-    setFormErrors(e);
-    return !Object.keys(e).length;
-  };
-
-  const handleSubmit = async () => {
-    if (!validate()) return;
-    setSubmitting(true);
+    setSaving(true);
+    setError('');
     try {
-      const fd = new FormData();
-      Object.entries(form).forEach(([k, v]) => fd.append(k, v));
-      if (imageFile) fd.append('image', imageFile);
-
-      if (editing) {
-        await updateProduct(editing.id, fd);
-        addToast({ type: 'success', message: 'Product updated successfully' });
+      const payload = { ...form, sellingPrice: parseFloat(form.sellingPrice), imageUrl: form.imageUrl || null };
+      if (editProduct) {
+        await api.put(`/products/${editProduct.id}`, payload);
       } else {
-        await createProduct(fd);
-        addToast({ type: 'success', message: 'Product created successfully' });
+        await api.post('/products', payload);
       }
-      setModal(false); load();
+      setShowForm(false);
+      fetchProducts();
     } catch (err) {
-      addToast({ type: 'error', message: err.response?.data?.message || 'Failed to save product' });
-    } finally { setSubmitting(false); }
+      setError(err.response?.data?.message || 'Failed to save product');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const openMediaPicker = () => {
+    api.get('/media').then(r => setMediaList(r.data));
+    setShowMediaPicker(true);
+  };
+
+  const handleMediaUpload = async (files) => {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    try {
+      for (const file of Array.from(files)) {
+        const formData = new FormData();
+        formData.append('image', file);
+        await api.post('/media/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      }
+      api.get('/media').then(r => setMediaList(r.data));
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleInlineUpload = async (files) => {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('image', files[0]);
+      const r = await api.post('/media/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      setForm(f => ({ ...f, imageUrl: r.data.url }));
+      loadRecentMedia();
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleDelete = async (id) => {
-    if (!confirm('Soft-delete this product?')) return;
-    try {
-      await deleteProduct(id);
-      addToast({ type: 'success', message: 'Product deactivated' });
-      load();
-    } catch (err) {
-      addToast({ type: 'error', message: err.response?.data?.message || 'Delete failed' });
-    }
+    if (!window.confirm('Deactivate this product?')) return;
+    await api.delete(`/products/${id}`);
+    fetchProducts();
   };
 
-  const fmt = (n) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
-
-  const columns = [
-    { key: 'imageUrl', label: 'Image', render: (v) => v
-      ? <img src={v} alt="" className="w-9 h-9 rounded-lg object-cover border border-gray-100" />
-      : <div className="w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center"><ImageOff size={14} className="text-gray-400" /></div> },
-    { key: 'name',     label: 'Name',     render: (v, r) => <span className="font-medium text-gray-900">{v}<br/><span className="text-xs text-gray-400">{r.sku}</span></span> },
-    { key: 'category', label: 'Category' },
-    { key: 'price',    label: 'Price',    render: (v) => fmt(v) },
-    { key: 'costPrice',label: 'Cost',     render: (v) => fmt(v) },
-    { key: 'unit',     label: 'Unit' },
-    { key: 'minStockAlert', label: 'Min Alert' },
-    { key: 'isActive', label: 'Status', render: (v) => <StatusBadge status={v ? 'ACTIVE' : 'CLOSED'} /> },
-    { key: 'actions',  label: '', render: (_, r) => (
-      <div className="flex gap-1">
-        <button onClick={() => openEdit(r)} className="p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition"><Edit size={15} /></button>
-        {user.role === 'ADMIN' && <button onClick={() => handleDelete(r.id)} className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition"><Trash2 size={15} /></button>}
-      </div>
-    )},
-  ];
+  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Loading…</div>;
 
   return (
-    <div className="space-y-4">
-      <div className="bg-white rounded-xl border border-gray-200 p-4">
-        <div className="flex flex-wrap gap-3 items-center justify-between">
-          <div className="flex gap-3">
-            <div className="relative">
-              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search products..."
-                className="pl-9 pr-3 py-2 rounded-lg border border-gray-300 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 w-56" />
-            </div>
-            <Select value={category} onChange={(e) => setCategory(e.target.value)} className="w-36">
-              <option value="">All categories</option>
-              {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
-            </Select>
-          </div>
-          <Button onClick={openAdd}><Plus size={15} /> Add Product</Button>
+    <div>
+      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <h1>Products</h1>
+          <p>Manage your kulfi product catalogue and selling prices</p>
         </div>
+        <button className="btn-primary" onClick={openAdd} style={{ marginTop: 4 }}>+ Add Product</button>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200">
-        <Table columns={columns} data={products} loading={loading} emptyMessage="No products found" />
-      </div>
+      {/* Modal */}
+      {showForm && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+        }}>
+          <div className="card" style={{ width: 460, maxWidth: '90vw', maxHeight: '90vh', overflowY: 'auto' }}>
+            <h2 style={{ marginBottom: 20, fontSize: 18 }}>{editProduct ? 'Edit Product' : 'Add Product'}</h2>
+            <form onSubmit={handleSubmit}>
+              <div className="form-group">
+                <label>Product Name</label>
+                <input
+                  className="form-input"
+                  placeholder="e.g. Amul Punjabi Kulfi"
+                  value={form.name}
+                  onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                />
+              </div>
 
-      <Modal open={modal} onClose={() => setModal(false)} title={editing ? 'Edit Product' : 'Add Product'} size="lg">
-        <div className="grid grid-cols-2 gap-4">
-          <div className="col-span-2">
-            <Input label="Product Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} error={formErrors.name} required />
+              <div className="form-group">
+                <label>Product Image <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(optional)</span></label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input
+                    className="form-input"
+                    placeholder="https://example.com/kulfi.png or select from media"
+                    value={form.imageUrl}
+                    onChange={e => setForm(f => ({ ...f, imageUrl: e.target.value }))}
+                    style={{ flex: 1 }}
+                  />
+                  <button type="button" className="btn-secondary" onClick={openMediaPicker} style={{ whiteSpace: 'nowrap', fontSize: 13 }}>
+                    🖼️ Select Media
+                  </button>
+                </div>
+                {form.imageUrl && (
+                  <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <ProductImage imageUrl={form.imageUrl} size={64} />
+                    <button type="button" onClick={() => setForm(f => ({ ...f, imageUrl: '' }))}
+                      style={{ fontSize: 12, color: '#e53935', background: 'none', border: 'none', cursor: 'pointer' }}>✕ Remove</button>
+                  </div>
+                )}
+              </div>
+
+              <div className="form-group">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <label style={{ margin: 0 }}>Recent Images</label>
+                  <button type="button" onClick={() => inlineFileRef.current.click()}
+                    style={{ fontSize: 12, color: 'var(--primary)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>
+                    {uploading ? 'Uploading…' : '+ Upload New'}
+                  </button>
+                  <input ref={inlineFileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => handleInlineUpload(e.target.files)} />
+                </div>
+                {recentMedia.length === 0 ? (
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '12px 0' }}>No images uploaded yet. Click "+ Upload New" to add one.</div>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(72px, 1fr))', gap: 8 }}>
+                    {recentMedia.map(m => (
+                      <div
+                        key={m.filename}
+                        onClick={() => setForm(f => ({ ...f, imageUrl: m.url }))}
+                        style={{
+                          borderRadius: 8, overflow: 'hidden', cursor: 'pointer',
+                          border: form.imageUrl === m.url ? '3px solid var(--primary)' : '3px solid transparent',
+                          background: 'var(--th-bg)', aspectRatio: '1',
+                        }}
+                      >
+                        <img src={m.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                          onError={e => e.target.style.display = 'none'} />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="form-group">
+                <label>Selling Price (₹)</label>
+                <input
+                  className="form-input"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="e.g. 25"
+                  value={form.sellingPrice}
+                  onChange={e => setForm(f => ({ ...f, sellingPrice: e.target.value }))}
+                />
+              </div>
+
+              {error && <div style={{ color: '#e53935', fontSize: 13, marginBottom: 12 }}>{error}</div>}
+
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>Cancel</button>
+                <button type="submit" className="btn-primary" disabled={saving}>
+                  {saving ? 'Saving…' : editProduct ? 'Update' : 'Add Product'}
+                </button>
+              </div>
+            </form>
           </div>
-          <Select label="Category" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} error={formErrors.category}>
-            <option value="">Select category</option>
-            {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
-          </Select>
-          <Input label="SKU Code" value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} error={formErrors.sku} />
-          <Input label="Selling Price ₹" type="number" min="0" step="0.01" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} error={formErrors.price} />
-          <Input label="Cost Price ₹" type="number" min="0" step="0.01" value={form.costPrice} onChange={(e) => setForm({ ...form, costPrice: e.target.value })} error={formErrors.costPrice} />
-          <Input label="Opening Stock" type="number" min="0" value={form.openingStock} onChange={(e) => setForm({ ...form, openingStock: Number(e.target.value) })} />
-          <Input label="Min Stock Alert" type="number" min="0" value={form.minStockAlert} onChange={(e) => setForm({ ...form, minStockAlert: Number(e.target.value) })} />
-          <div className="col-span-2">
-            <label className="text-sm font-medium text-gray-700 block mb-1">Unit</label>
-            <div className="flex gap-4">
-              {['PCS','BOX'].map((u) => (
-                <label key={u} className="flex items-center gap-2 cursor-pointer">
-                  <input type="radio" value={u} checked={form.unit === u} onChange={() => setForm({ ...form, unit: u })} className="accent-indigo-600" />
-                  <span className="text-sm text-gray-700">{u}</span>
-                </label>
-              ))}
+        </div>
+      )}
+
+      {/* Product grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 16 }}>
+        {products.map(p => (
+          <div key={p.id} className="card" style={{ borderTop: '3px solid var(--primary)' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
+              <ProductImage imageUrl={p.imageUrl} size={90} />
+            </div>
+            <div style={{ fontWeight: 700, fontSize: 15, marginTop: 4 }}>{p.name}</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--primary)', marginTop: 8 }}>
+              ₹{p.sellingPrice}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Selling Price</div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+              <button className="btn-secondary" style={{ flex: 1, fontSize: 12 }} onClick={() => openEdit(p)}>Edit</button>
+              <button
+                style={{ flex: 1, fontSize: 12, padding: '6px 10px', borderRadius: 6, border: '1px solid #e53935', color: '#e53935', background: 'transparent', cursor: 'pointer' }}
+                onClick={() => handleDelete(p.id)}
+              >Remove</button>
             </div>
           </div>
-          <div className="col-span-2">
-            <Input label="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-          </div>
+        ))}
+      </div>
 
-          {/* Image upload */}
-          <div className="col-span-2">
-            <label className="text-sm font-medium text-gray-700 block mb-2">Product Image</label>
+      {products.length === 0 && (
+        <div className="card" style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
+          No products yet. Click "+ Add Product" to get started.
+        </div>
+      )}
+
+      {/* Media Picker Modal */}
+      {showMediaPicker && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000 }}>
+          <div className="card" style={{ width: 640, maxWidth: '95vw', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h2 style={{ fontSize: 18, margin: 0 }}>🖼️ Select from Media</h2>
+              <button onClick={() => setShowMediaPicker(false)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--text-muted)' }}>✕</button>
+            </div>
+
+            {/* Upload in picker */}
             <div
-              onClick={() => fileRef.current?.click()}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => { e.preventDefault(); handleFile(e.dataTransfer.files[0]); }}
-              className="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/30 transition"
+              onClick={() => fileInputRef.current.click()}
+              style={{ border: '2px dashed #B2DFDB', borderRadius: 8, padding: '14px 20px', textAlign: 'center', cursor: 'pointer', marginBottom: 16, background: 'var(--bg)' }}
             >
-              {imagePreview ? (
-                <div className="flex items-center gap-4">
-                  <img src={imagePreview} alt="" className="w-16 h-16 rounded-lg object-cover border border-gray-200" />
-                  <div className="text-left">
-                    <p className="text-sm text-gray-700">Image selected</p>
-                    <button onClick={(e) => { e.stopPropagation(); setImageFile(null); setPreview(null); }}
-                      className="text-xs text-red-500 hover:underline flex items-center gap-1 mt-1">
-                      <X size={12} /> Remove
-                    </button>
-                  </div>
-                </div>
+              <input ref={fileInputRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={e => handleMediaUpload(e.target.files)} />
+              {uploading ? <span style={{ color: 'var(--primary)' }}>Uploading…</span> : <span style={{ color: 'var(--primary)', fontWeight: 600 }}>+ Upload New Image</span>}
+            </div>
+
+            {/* Grid */}
+            <div style={{ overflowY: 'auto', flex: 1 }}>
+              {mediaList.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>No images uploaded yet</div>
               ) : (
-                <div className="py-2">
-                  <Upload size={24} className="mx-auto text-gray-400 mb-1" />
-                  <p className="text-sm text-gray-500">Drag & drop or <span className="text-indigo-600">browse</span></p>
-                  <p className="text-xs text-gray-400 mt-1">JPEG, PNG, WebP — max 2MB</p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 10 }}>
+                  {mediaList.map(m => (
+                    <div
+                      key={m.filename}
+                      onClick={() => { setForm(f => ({ ...f, imageUrl: m.url })); setShowMediaPicker(false); }}
+                      style={{
+                        borderRadius: 8, overflow: 'hidden', cursor: 'pointer', border: form.imageUrl === m.url ? '3px solid var(--primary)' : '3px solid transparent',
+                        background: 'var(--th-bg)', transition: 'border 0.15s',
+                      }}
+                    >
+                      <img src={m.url} alt="" style={{ width: '100%', height: 110, objectFit: 'cover', display: 'block' }} onError={e => e.target.style.display = 'none'} />
+                      <div style={{ padding: '4px 6px', fontSize: 10, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {m.filename.split('_').slice(2).join('_') || m.filename}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
-            {imageError && <p className="text-xs text-red-600 mt-1">{imageError}</p>}
-            <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
-              onChange={(e) => handleFile(e.target.files[0])} />
-          </div>
 
-          <div className="col-span-2 flex items-center gap-2">
-            <input type="checkbox" id="isActive" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} className="accent-indigo-600 w-4 h-4" />
-            <label htmlFor="isActive" className="text-sm text-gray-700">Active product</label>
+            <div style={{ marginTop: 14, display: 'flex', justifyContent: 'flex-end' }}>
+              <button className="btn-secondary" onClick={() => setShowMediaPicker(false)}>Cancel</button>
+            </div>
           </div>
         </div>
-
-        <div className="flex gap-3 mt-5">
-          <Button variant="secondary" className="flex-1" onClick={() => setModal(false)}>Cancel</Button>
-          <Button className="flex-1" loading={submitting} onClick={handleSubmit}>
-            {editing ? 'Update Product' : 'Create Product'}
-          </Button>
-        </div>
-      </Modal>
+      )}
     </div>
   );
 }

@@ -1,58 +1,47 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import ProtectedRoute from './components/layout/ProtectedRoute';
-import ToastContainer from './components/ui/Toast';
-import Login           from './pages/Login';
-import Dashboard       from './pages/Dashboard';
-import Dispatch        from './pages/Dispatch';
-import ShopSales       from './pages/ShopSales';
-import LiveStock       from './pages/LiveStock';
-import ClosingApproval from './pages/ClosingApproval';
-import Products        from './pages/Products';
-import Expenses        from './pages/Expenses';
-import Reports         from './pages/Reports';
-import Settings        from './pages/Settings';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import ProtectedRoute from './components/ProtectedRoute';
+import Layout from './components/Layout';
+
+import Login from './pages/Login';
+import Dashboard from './pages/Dashboard';
+import PurchaseEntry from './pages/PurchaseEntry';
+import SalesEntry from './pages/SalesEntry';
+import CurrentStock from './pages/CurrentStock';
+import Reports from './pages/Reports';
+import Settings from './pages/Settings';
+import Products from './pages/Products';
+import Media from './pages/Media';
+import Profile from './pages/Profile';
+
+function AppRoutes() {
+  const { token, isAuthReady } = useAuth();
+  return (
+    <Routes>
+      <Route
+        path="/login"
+        element={!isAuthReady ? null : (token ? <Navigate to="/" replace /> : <Login />)}
+      />
+      <Route path="/" element={<ProtectedRoute><Layout><Dashboard /></Layout></ProtectedRoute>} />
+      <Route path="/purchase" element={<ProtectedRoute><Layout><PurchaseEntry /></Layout></ProtectedRoute>} />
+      <Route path="/sales" element={<ProtectedRoute><Layout><SalesEntry /></Layout></ProtectedRoute>} />
+      <Route path="/stock" element={<ProtectedRoute><Layout><CurrentStock /></Layout></ProtectedRoute>} />
+      <Route path="/reports" element={<ProtectedRoute><Layout><Reports /></Layout></ProtectedRoute>} />
+      <Route path="/products" element={<ProtectedRoute><Layout><Products /></Layout></ProtectedRoute>} />
+      <Route path="/media" element={<ProtectedRoute><Layout><Media /></Layout></ProtectedRoute>} />
+      <Route path="/settings" element={<ProtectedRoute><Layout><Settings /></Layout></ProtectedRoute>} />
+      <Route path="/profile" element={<ProtectedRoute><Layout><Profile /></Layout></ProtectedRoute>} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <ToastContainer />
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
-
-        {/* All authenticated users */}
-        <Route element={<ProtectedRoute roles={['ADMIN','BRANCH_MANAGER','SALESPERSON']} title="Dashboard" />}>
-          <Route path="/dashboard" element={<Dashboard />} />
-        </Route>
-
-        {/* Admin & Branch Manager routes */}
-        <Route element={<ProtectedRoute roles={['ADMIN','BRANCH_MANAGER']} title="Dispatch" />}>
-          <Route path="/dispatch" element={<Dispatch />} />
-        </Route>
-        <Route element={<ProtectedRoute roles={['ADMIN','BRANCH_MANAGER']} title="Shop Sales" />}>
-          <Route path="/shop-sales" element={<ShopSales />} />
-        </Route>
-        <Route element={<ProtectedRoute roles={['ADMIN','BRANCH_MANAGER','SALESPERSON']} title="Live Stock" />}>
-          <Route path="/live-stock" element={<LiveStock />} />
-        </Route>
-        <Route element={<ProtectedRoute roles={['ADMIN','BRANCH_MANAGER']} title="Day Closing" />}>
-          <Route path="/closing" element={<ClosingApproval />} />
-        </Route>
-        <Route element={<ProtectedRoute roles={['ADMIN','BRANCH_MANAGER']} title="Products" />}>
-          <Route path="/products" element={<Products />} />
-        </Route>
-        <Route element={<ProtectedRoute roles={['ADMIN','BRANCH_MANAGER']} title="Expenses" />}>
-          <Route path="/expenses" element={<Expenses />} />
-        </Route>
-        <Route element={<ProtectedRoute roles={['ADMIN','BRANCH_MANAGER']} title="Reports" />}>
-          <Route path="/reports" element={<Reports />} />
-        </Route>
-        <Route element={<ProtectedRoute roles={['ADMIN']} title="Settings" />}>
-          <Route path="/settings" element={<Settings />} />
-        </Route>
-
-        <Route path="*" element={<Navigate to="/login" replace />} />
-      </Routes>
-    </BrowserRouter>
+    <AuthProvider>
+      <BrowserRouter>
+        <AppRoutes />
+      </BrowserRouter>
+    </AuthProvider>
   );
 }
