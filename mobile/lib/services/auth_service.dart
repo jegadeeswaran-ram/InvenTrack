@@ -1,91 +1,71 @@
-import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../config/app_config.dart';
+import '../models/user_model.dart';
 import 'api_service.dart';
 
-class AuthUser {
-  final int id;
-  final String name;
-  final String username;
-  final String email;
-  final String? photo;
-  final String role;
+class AuthService {
+  static const _storage = FlutterSecureStorage();
+  static const _keyAccess  = 'access_token';
+  static const _keyRefresh = 'refresh_token';
+  static const _keyUser    = 'user_json';
 
-  AuthUser({required this.id, required this.name, required this.username, required this.email, this.photo, required this.role});
+  static Future<Map<String, dynamic>> login(String loginId, String password) async {
+    final res = await ApiService.post(
+      '${AppConfig.baseUrl}/auth/login',
+      {'login': loginId, 'password': password},
+      requiresAuth: false,
+    );
+    final data = res['data'] as Map<String, dynamic>;
+    await _storage.write(key: _keyAccess,  value: data['accessToken']);
+    await _storage.write(key: _keyRefresh, value: data['refreshToken']);
+    await _storage.write(key: _keyUser, value: jsonEncode(data['user']));
+    return data;
+  }
 
-  factory AuthUser.fromJson(Map<String, dynamic> json) => AuthUser(
-        id: json['id'],
-        name: json['name'],
-        username: json['username'],
-        email: json['email'] ?? '',
-        photo: json['photo'],
-        role: json['role'],
-      );
-
-  AuthUser copyWith({String? name, String? username, String? email, String? photo}) => AuthUser(
-        id: id,
-        name: name ?? this.name,
-        username: username ?? this.username,
-        email: email ?? this.email,
-        photo: photo ?? this.photo,
-        role: role,
-      );
-}
-
-class AuthService extends ChangeNotifier {
-  static SharedPreferences? _storage;
-  static const _tokenKey = 'jwt_token';
-
-  AuthUser? _user;
-  String? _token;
-  bool _loading = true;
-
-  AuthUser? get user => _user;
-  String? get token => _token;
-  bool get isLoggedIn => _token != null && _user != null;
-  bool get isLoading => _loading;
-  bool get isAdmin => _user?.role == 'ADMIN';
-
-  Future<void> init() async {
-    _loading = true;
-    _storage ??= await SharedPreferences.getInstance();
+  static Future<void> logout() async {
     try {
-      final storedToken = _storage!.getString(_tokenKey);
-      if (storedToken != null) {
-        final data = await ApiService.get('/auth/me', token: storedToken);
-        _token = storedToken;
-        _user = AuthUser.fromJson(data);
+      final refresh = await _storage.read(key: _keyRefresh);
+      if (refresh != null) {
+        await ApiService.post(
+          '${AppConfig.baseUrl}/auth/logout',
+          {'refreshToken': refresh},
+          requiresAuth: false,
+        );
       }
+    } catch (_) {}
+    await _storage.deleteAll();
+  }
+
+  static Future<String?> getAccessToken() => _storage.read(key: _keyAccess);
+  static Future<String?> getRefreshToken() => _storage.read(key: _keyRefresh);
+
+  static Future<UserModel?> getSavedUser() async {
+    final raw = await _storage.read(key: _keyUser);
+    if (raw == null) return null;
+    return UserModel.fromJson(jsonDecode(raw));
+  }
+
+  static Future<bool> refreshTokens() async {
+    try {
+      final refresh = await _storage.read(key: _keyRefresh);
+      if (refresh == null) return false;
+      final res = await ApiService.post(
+        '${AppConfig.baseUrl}/auth/refresh',
+        {'refreshToken': refresh},
+        requiresAuth: false,
+      );
+      final data = res['data'] as Map<String, dynamic>;
+      await _storage.write(key: _keyAccess,  value: data['accessToken']);
+      await _storage.write(key: _keyRefresh, value: data['refreshToken']);
+      return true;
     } catch (_) {
-      await _storage!.remove(_tokenKey);
-      _token = null;
-      _user = null;
-    } finally {
-      _loading = false;
-      notifyListeners();
+      return false;
     }
   }
 
-  Future<void> login(String username, String password) async {
-    final data = await ApiService.post('/auth/login', {
-      'username': username,
-      'password': password,
-    });
-    _token = data['token'];
-    _user = AuthUser.fromJson(data['user']);
-    await _storage!.setString(_tokenKey, _token!);
-    notifyListeners();
-  }
-
-  Future<void> updateProfile(Map<String, dynamic> data) async {
-    final updated = await ApiService.put('/auth/profile', data, token: _token);
-    _user = AuthUser.fromJson(updated);
-    notifyListeners();
-  }
-
-  Future<void> logout() async {
-    await _storage!.remove(_tokenKey);
-    _token = null;
-    _user = null;
-    notifyListeners();
+  static Future<bool> isLoggedIn() async {
+    final token = await _storage.read(key: _keyAccess);
+    return token != null && token.isNotEmpty;
   }
 }

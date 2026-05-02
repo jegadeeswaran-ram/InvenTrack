@@ -1,16 +1,18 @@
 {
   "name": "kulfi-ice-inventrack-backend",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Kulfi ICE InvenTrack - Backend API",
-  "main": "src/index.js",
+  "main": "src/app.js",
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "nodemon src/index.js",
+    "start": "node src/app.js",
+    "dev": "nodemon src/app.js",
+    "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
     "db:push": "prisma db push",
     "db:seed": "node prisma/seed.js",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "db:reset": "prisma migrate reset --force"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1033.0",
@@ -26,5 +28,8 @@
   "devDependencies": {
     "nodemon": "^3.1.7",
     "prisma": "^5.22.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
   }
 }

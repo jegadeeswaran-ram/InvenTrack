@@ -7,63 +7,293 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id        Int      @id @default(autoincrement())
-  name      String
-  username  String   @unique
-  email     String   @default("")
-  password  String   // bcrypt hashed
-  photo     String?  // base64 or URL
-  role      Role     @default(SALES)
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  sales     Sale[]
-}
+// ─── Enums ────────────────────────────────────────────────────────────────────
 
 enum Role {
   ADMIN
-  SALES
+  BRANCH_MANAGER
+  SALESPERSON
+}
+
+enum StockUnit {
+  PCS
+  BOX
+}
+
+enum SessionStatus {
+  ACTIVE
+  PENDING
+  CLOSED
+}
+
+enum SaleType {
+  TRUCK
+  SHOP
+}
+
+enum ClosingStatus {
+  PENDING
+  APPROVED
+  ADJUSTED
+  CLOSED
+}
+
+enum ExpenseCategory {
+  SALARY
+  INCENTIVE
+  ELECTRICITY
+  RENT
+  MISCELLANEOUS
+}
+
+// ─── Models ───────────────────────────────────────────────────────────────────
+
+model Branch {
+  id          Int      @id @default(autoincrement())
+  name        String
+  address     String   @default("")
+  phone       String   @default("")
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  users        User[]
+  branchStocks BranchStock[]
+  truckSessions TruckSession[]
+  sales        Sale[]
+  expenses     Expense[]
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  name         String
+  email        String?  @unique
+  mobile       String?  @unique
+  passwordHash String
+  role         Role     @default(SALESPERSON)
+  branchId     Int?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  branch          Branch?          @relation(fields: [branchId], references: [id])
+  truckSessions   TruckSession[]
+  sales           Sale[]
+  expenses        Expense[]
+  auditLogs       AuditLog[]
+  refreshTokens   RefreshToken[]
+  closingSubmissions ClosingRecord[] @relation("SubmittedBy")
+  closingReviews     ClosingRecord[] @relation("ReviewedBy")
+
+  @@index([branchId])
+  @@index([role])
 }
 
 model Product {
-  id              Int        @id @default(autoincrement())
-  name            String
-  emoji           String     @default("🍦")
-  imageUrl        String?
-  sellingPrice    Float      @default(0)
-  costPerUnit     Float      @default(0)
-  piecesPerPacket Int        @default(1)
-  isActive        Boolean    @default(true)
-  createdAt       DateTime   @default(now())
-  purchases       Purchase[]
-  sales           Sale[]
+  id             Int       @id @default(autoincrement())
+  name           String
+  category       String
+  sku            String    @unique
+  price          Decimal   @db.Decimal(10, 2)
+  costPrice      Decimal   @db.Decimal(10, 2)
+  unit           StockUnit @default(PCS)
+  openingStock   Int       @default(0)
+  minStockAlert  Int       @default(5)
+  description    String?
+  imageUrl       String?
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+
+  branchStocks      BranchStock[]
+  truckDispatches   TruckDispatch[]
+  saleItems         SaleItem[]
+  closingStockItems ClosingStockItem[]
+
+  @@index([category])
+  @@index([isActive])
 }
 
-model Purchase {
-  id           Int      @id @default(autoincrement())
-  date         DateTime
-  productId    Int
-  product      Product  @relation(fields: [productId], references: [id])
-  manufacturer String   @default("")
-  quantity     Float
-  costPerUnit  Float
-  totalCost    Float
-  notes        String?
-  createdAt    DateTime @default(now())
+model BranchStock {
+  id        Int      @id @default(autoincrement())
+  branchId  Int
+  productId Int
+  quantity  Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  branch  Branch  @relation(fields: [branchId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  @@unique([branchId, productId])
+  @@index([branchId])
+  @@index([productId])
+}
+
+model TruckSession {
+  id          Int           @id @default(autoincrement())
+  branchId    Int
+  truckId     String
+  userId      Int
+  sessionDate DateTime      @db.Date
+  status      SessionStatus @default(ACTIVE)
+  createdAt   DateTime      @default(now())
+
+  branch        Branch          @relation(fields: [branchId], references: [id])
+  user          User            @relation(fields: [userId], references: [id])
+  dispatches    TruckDispatch[]
+  sales         Sale[]
+  closingRecord ClosingRecord?
+
+  @@index([branchId])
+  @@index([userId])
+  @@index([sessionDate])
+  @@index([status])
+}
+
+model TruckDispatch {
+  id          Int @id @default(autoincrement())
+  sessionId   Int
+  productId   Int
+  dispatchQty Int
+  soldQty     Int @default(0)
+  returnQty   Int @default(0)
+
+  session TruckSession @relation(fields: [sessionId], references: [id])
+  product Product      @relation(fields: [productId], references: [id])
+
+  @@unique([sessionId, productId])
+  @@index([sessionId])
+  @@index([productId])
 }
 
 model Sale {
-  id           Int      @id @default(autoincrement())
-  date         DateTime
-  productId    Int
-  product      Product  @relation(fields: [productId], references: [id])
-  userId       Int
-  user         User     @relation(fields: [userId], references: [id])
-  quantity     Float
-  pricePerUnit Float
-  totalRevenue Float
-  avgCostUnit  Float    // copied from purchase avg at time of sale
-  profit       Float    // (pricePerUnit - avgCostUnit) * quantity
-  notes        String?
-  createdAt    DateTime @default(now())
+  id          Int      @id @default(autoincrement())
+  sessionId   Int?
+  branchId    Int
+  userId      Int
+  saleType    SaleType
+  totalAmount Decimal  @db.Decimal(10, 2)
+  saleDate    DateTime @default(now())
+
+  session  TruckSession? @relation(fields: [sessionId], references: [id])
+  branch   Branch        @relation(fields: [branchId], references: [id])
+  user     User          @relation(fields: [userId], references: [id])
+  saleItems SaleItem[]
+
+  @@index([branchId])
+  @@index([userId])
+  @@index([sessionId])
+  @@index([saleDate])
+  @@index([saleType])
+}
+
+model SaleItem {
+  id         Int     @id @default(autoincrement())
+  saleId     Int
+  productId  Int
+  quantity   Int
+  unitPrice  Decimal @db.Decimal(10, 2)
+  totalPrice Decimal @db.Decimal(10, 2)
+
+  sale    Sale    @relation(fields: [saleId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([saleId])
+  @@index([productId])
+}
+
+model ClosingRecord {
+  id               Int           @id @default(autoincrement())
+  sessionId        Int           @unique
+  submittedBy      Int
+  submittedAt      DateTime      @default(now())
+  reviewedBy       Int?
+  reviewedAt       DateTime?
+  status           ClosingStatus @default(PENDING)
+  notes            String?
+  adjustmentReason String?
+
+  session    TruckSession      @relation(fields: [sessionId], references: [id])
+  submitter  User              @relation("SubmittedBy", fields: [submittedBy], references: [id])
+  reviewer   User?             @relation("ReviewedBy", fields: [reviewedBy], references: [id])
+  stockItems ClosingStockItem[]
+
+  @@index([status])
+  @@index([submittedBy])
+}
+
+model ClosingStockItem {
+  id               Int  @id @default(autoincrement())
+  closingRecordId  Int
+  productId        Int
+  dispatchQty      Int
+  soldQty          Int
+  systemRemaining  Int
+  enteredReturnQty Int
+  approvedReturnQty Int?
+  differenceQty    Int
+
+  closingRecord ClosingRecord @relation(fields: [closingRecordId], references: [id])
+  product       Product       @relation(fields: [productId], references: [id])
+
+  @@index([closingRecordId])
+  @@index([productId])
+}
+
+model Expense {
+  id          Int             @id @default(autoincrement())
+  branchId    Int
+  userId      Int
+  category    ExpenseCategory
+  amount      Decimal         @db.Decimal(10, 2)
+  description String?
+  expenseDate DateTime        @db.Date
+  createdAt   DateTime        @default(now())
+
+  branch Branch @relation(fields: [branchId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@index([branchId])
+  @@index([category])
+  @@index([expenseDate])
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  action    String
+  entity    String
+  entityId  String
+  before    Json?
+  after     Json?
+  timestamp DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([entity])
+  @@index([timestamp])
+}
+
+model Permission {
+  id        Int     @id @default(autoincrement())
+  role      Role
+  module    String
+  canView   Boolean @default(false)
+  canCreate Boolean @default(false)
+  canEdit   Boolean @default(false)
+  canDelete Boolean @default(false)
+
+  @@unique([role, module])
+  @@index([role])
+}
+
+model RefreshToken {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([expiresAt])
 }
