@@ -9,6 +9,7 @@ const saleRoutes = require('./routes/sale.routes');
 const reportRoutes = require('./routes/report.routes');
 const userRoutes = require('./routes/user.routes');
 const mediaRoutes = require('./routes/media.routes');
+const truckRoutes = require('./routes/truck.routes');
 const { bucketEnabled, ensureLocalUploadsDir } = require('./services/storage.service');
 
 const app = express();
@@ -72,6 +73,7 @@ app.use('/api/sales', saleRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/media', mediaRoutes);
+app.use('/api/truck', truckRoutes);
 
 // Global error handler
 app.use((err, req, res, next) => {

@@ -7,36 +7,71 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id        Int      @id @default(autoincrement())
-  name      String
-  username  String   @unique
-  email     String   @default("")
-  password  String   // bcrypt hashed
-  photo     String?  // base64 or URL
-  role      Role     @default(SALES)
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  sales     Sale[]
-}
-
 enum Role {
   ADMIN
   SALES
+  BRANCH_MANAGER
+  TRUCK_SALES
+}
+
+enum SessionStatus {
+  OPEN
+  CLOSED
+}
+
+model Branch {
+  id        Int            @id @default(autoincrement())
+  name      String
+  address   String?
+  isActive  Boolean        @default(true)
+  createdAt DateTime       @default(now())
+  users     User[]
+  trucks    Truck[]
+  sessions  TruckSession[]
+}
+
+model Truck {
+  id        Int            @id @default(autoincrement())
+  name      String
+  plateNo   String?
+  branchId  Int
+  branch    Branch         @relation(fields: [branchId], references: [id])
+  isActive  Boolean        @default(true)
+  createdAt DateTime       @default(now())
+  sessions  TruckSession[]
+}
+
+model User {
+  id        Int            @id @default(autoincrement())
+  name      String
+  username  String         @unique
+  mobile    String?        @unique
+  email     String         @default("")
+  password  String
+  photo     String?
+  role      Role           @default(SALES)
+  isActive  Boolean        @default(true)
+  branchId  Int?
+  branch    Branch?        @relation(fields: [branchId], references: [id])
+  createdAt DateTime       @default(now())
+  sales     Sale[]
+  sessions  TruckSession[]
 }
 
 model Product {
-  id              Int        @id @default(autoincrement())
+  id              Int             @id @default(autoincrement())
   name            String
-  emoji           String     @default("🍦")
+  emoji           String          @default("🍦")
   imageUrl        String?
-  sellingPrice    Float      @default(0)
-  costPerUnit     Float      @default(0)
-  piecesPerPacket Int        @default(1)
-  isActive        Boolean    @default(true)
-  createdAt       DateTime   @default(now())
+  sellingPrice    Float           @default(0)
+  costPerUnit     Float           @default(0)
+  piecesPerPacket Int             @default(1)
+  isActive        Boolean         @default(true)
+  createdAt       DateTime        @default(now())
   purchases       Purchase[]
   sales           Sale[]
+  saleItems       TruckSaleItem[]
+  closingStocks   ClosingStock[]
 }
 
 model Purchase {
@@ -62,8 +97,59 @@ model Sale {
   quantity     Float
   pricePerUnit Float
   totalRevenue Float
-  avgCostUnit  Float    // copied from purchase avg at time of sale
-  profit       Float    // (pricePerUnit - avgCostUnit) * quantity
+  avgCostUnit  Float
+  profit       Float
   notes        String?
   createdAt    DateTime @default(now())
+}
+
+model TruckSession {
+  id           Int            @id @default(autoincrement())
+  userId       Int
+  user         User           @relation(fields: [userId], references: [id])
+  truckId      Int
+  truck        Truck          @relation(fields: [truckId], references: [id])
+  branchId     Int
+  branch       Branch         @relation(fields: [branchId], references: [id])
+  startTime    DateTime       @default(now())
+  endTime      DateTime?
+  status       SessionStatus  @default(OPEN)
+  createdAt    DateTime       @default(now())
+  sales        TruckSale[]
+  closingStock ClosingStock[]
+}
+
+model TruckSale {
+  id          Int             @id @default(autoincrement())
+  sessionId   Int
+  session     TruckSession    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  totalAmount Float
+  timestamp   DateTime        @default(now())
+  createdAt   DateTime        @default(now())
+  items       TruckSaleItem[]
+}
+
+model TruckSaleItem {
+  id        Int       @id @default(autoincrement())
+  saleId    Int
+  sale      TruckSale @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  productId Int
+  product   Product   @relation(fields: [productId], references: [id])
+  quantity  Float
+  price     Float
+  total     Float
+}
+
+model ClosingStock {
+  id         Int          @id @default(autoincrement())
+  sessionId  Int
+  session    TruckSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  productId  Int
+  product    Product      @relation(fields: [productId], references: [id])
+  soldQty    Float
+  closingQty Float
+  openingQty Float
+  createdAt  DateTime     @default(now())
+
+  @@unique([sessionId, productId])
 }

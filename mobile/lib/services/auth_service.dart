@@ -6,28 +6,43 @@ class AuthUser {
   final int id;
   final String name;
   final String username;
+  final String? mobile;
   final String email;
   final String? photo;
   final String role;
+  final int? branchId;
 
-  AuthUser({required this.id, required this.name, required this.username, required this.email, this.photo, required this.role});
+  AuthUser({
+    required this.id,
+    required this.name,
+    required this.username,
+    this.mobile,
+    required this.email,
+    this.photo,
+    required this.role,
+    this.branchId,
+  });
 
   factory AuthUser.fromJson(Map<String, dynamic> json) => AuthUser(
         id: json['id'],
         name: json['name'],
         username: json['username'],
+        mobile: json['mobile'],
         email: json['email'] ?? '',
         photo: json['photo'],
         role: json['role'],
+        branchId: json['branchId'],
       );
 
   AuthUser copyWith({String? name, String? username, String? email, String? photo}) => AuthUser(
         id: id,
         name: name ?? this.name,
         username: username ?? this.username,
+        mobile: mobile,
         email: email ?? this.email,
         photo: photo ?? this.photo,
         role: role,
+        branchId: branchId,
       );
 }
 

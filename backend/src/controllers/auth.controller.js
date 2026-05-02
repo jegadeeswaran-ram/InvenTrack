@@ -9,7 +9,10 @@ const login = async (req, res) => {
     return res.status(400).json({ message: 'Username and password are required' });
   }
 
-  const user = await prisma.user.findUnique({ where: { username } });
+  // Accept username or mobile number in the username field
+  const user = await prisma.user.findFirst({
+    where: { OR: [{ username }, { mobile: username }] },
+  });
   if (!user || !user.isActive) {
     return res.status(401).json({ message: 'Invalid credentials' });
   }
@@ -27,14 +30,21 @@ const login = async (req, res) => {
 
   return res.json({
     token,
-    user: { id: user.id, name: user.name, username: user.username, role: user.role },
+    user: {
+      id: user.id,
+      name: user.name,
+      username: user.username,
+      mobile: user.mobile || null,
+      role: user.role,
+      branchId: user.branchId || null,
+    },
   });
 };
 
 const me = async (req, res) => {
   const user = await prisma.user.findUnique({
     where: { id: req.user.id },
-    select: { id: true, name: true, username: true, email: true, photo: true, role: true, isActive: true },
+    select: { id: true, name: true, username: true, mobile: true, email: true, photo: true, role: true, isActive: true, branchId: true },
   });
   if (!user) return res.status(404).json({ message: 'User not found' });
   return res.json(user);

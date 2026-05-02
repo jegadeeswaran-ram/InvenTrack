@@ -5,6 +5,7 @@ import '../services/auth_service.dart';
 import '../widgets/inventrack_logo.dart';
 import 'sales_user_shell.dart';
 import 'admin/admin_shell.dart';
+import 'truck/truck_shell.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -27,8 +28,11 @@ class _LoginScreenState extends State<LoginScreen> {
       final auth = context.read<AuthService>();
       await auth.login(_usernameCtrl.text.trim(), _passwordCtrl.text);
       if (!mounted) return;
-      if (auth.isAdmin) {
+      final role = auth.user?.role;
+      if (role == 'ADMIN' || role == 'BRANCH_MANAGER') {
         Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const AdminShell()));
+      } else if (role == 'TRUCK_SALES') {
+        Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const TruckShell()));
       } else {
         Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const SalesUserShell()));
       }
