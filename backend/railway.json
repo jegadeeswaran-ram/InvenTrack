@@ -4,7 +4,7 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "startCommand": "npx prisma generate && npx prisma db push && node src/index.js",
+    "startCommand": "npm install && npx prisma generate && npx prisma db push --accept-data-loss && node prisma/seed.js && npm start",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 3
   }

@@ -1,83 +1,82 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import api from '../api/axios';
+import { Eye, EyeOff, Package } from 'lucide-react';
+import { login } from '../api/endpoints/auth';
+import useStore from '../store/useStore';
+import Button from '../components/ui/Button';
+import Input from '../components/ui/Input';
 
 export default function Login() {
-  const { login } = useAuth();
-  const navigate = useNavigate();
-  const [form, setForm] = useState({ username: '', password: '' });
-  const [error, setError] = useState('');
+  const navigate  = useNavigate();
+  const setAuth   = useStore((s) => s.setAuth);
+  const [form, setForm]       = useState({ login: '', password: '' });
+  const [showPw, setShowPw]   = useState(false);
+  const [error, setError]     = useState('');
   const [loading, setLoading] = useState(false);
-  const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') === 'dark');
-
-  useEffect(() => {
-    const onStorage = () => setIsDark(localStorage.getItem('theme') === 'dark');
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
-  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      const { data } = await api.post('/auth/login', form);
-      login(data.token, data.user);
-      navigate('/');
+      const { data } = await login(form);
+      setAuth({ user: data.user, accessToken: data.accessToken, refreshToken: data.refreshToken });
+      navigate('/dashboard', { replace: true });
     } catch (err) {
-      setError(err.response?.data?.message || 'Login failed');
+      setError(err.response?.data?.message || 'Login failed. Please check your credentials.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div style={{
-      minHeight: '100vh', background: 'var(--bg)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-    }}>
-      <div className="card" style={{ width: 360, padding: 36 }}>
-        <div style={{ textAlign: 'center', marginBottom: 28 }}>
-          <img
-            src={isDark ? '/logo_dark_theme.svg' : '/logo_light_theme.svg'}
-            alt="InvenTrack"
-            style={{ width: 220, margin: '0 auto 8px', display: 'block' }}
-          />
-          <p style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 4 }}>Admin Panel</p>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-indigo-50 flex items-center justify-center p-4">
+      <div className="w-full max-w-sm">
+        <div className="flex flex-col items-center mb-8">
+          <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center mb-3 shadow-lg shadow-indigo-200">
+            <Package size={24} className="text-white" />
+          </div>
+          <h1 className="text-xl font-bold text-gray-900">InvenTrack</h1>
+          <p className="text-sm text-gray-500 mt-1">Kulfi ICE Management System</p>
         </div>
 
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label>Username</label>
-            <input
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+          <h2 className="text-base font-semibold text-gray-900 mb-5">Sign in to your account</h2>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <Input
+              label="Email or Mobile"
               type="text"
-              placeholder="Enter username"
-              value={form.username}
-              onChange={(e) => setForm({ ...form, username: e.target.value })}
+              placeholder="admin@kulfi.com or 9xxxxxxxxx"
+              value={form.login}
+              onChange={(e) => setForm({ ...form, login: e.target.value })}
+              autoComplete="username"
               required
             />
-          </div>
-          <div className="form-group">
-            <label>Password</label>
-            <input
-              type="password"
-              placeholder="Enter password"
-              value={form.password}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
-              required
-            />
-          </div>
-          {error && <p className="error-msg">{error}</p>}
-          <button
-            type="submit"
-            className="btn-primary"
-            disabled={loading}
-            style={{ width: '100%', padding: '10px', marginTop: 8, fontSize: 15 }}
-          >
-            {loading ? 'Logging in…' : 'Login'}
-          </button>
-        </form>
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium text-gray-700">Password</label>
+              <div className="relative">
+                <input
+                  type={showPw ? 'text' : 'password'}
+                  placeholder="••••••••"
+                  value={form.password}
+                  onChange={(e) => setForm({ ...form, password: e.target.value })}
+                  autoComplete="current-password"
+                  required
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 pr-10 text-sm text-gray-900 placeholder-gray-400 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition"
+                />
+                <button type="button" onClick={() => setShowPw(!showPw)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                  {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </div>
+            {error && (
+              <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>
+            )}
+            <Button type="submit" className="w-full" loading={loading}>Sign in</Button>
+          </form>
+        </div>
+        <p className="text-center text-xs text-gray-400 mt-5">Kulfi ICE InvenTrack v2.0</p>
       </div>
     </div>
   );
