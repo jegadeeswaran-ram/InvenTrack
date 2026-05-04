@@ -3,14 +3,14 @@ const prisma = require('../config/db');
 
 const getUsers = async (req, res) => {
   const users = await prisma.user.findMany({
-    select: { id: true, name: true, username: true, role: true, isActive: true, createdAt: true },
+    select: { id: true, name: true, username: true, mobile: true, role: true, isActive: true, branchId: true, createdAt: true },
     orderBy: { createdAt: 'asc' },
   });
   return res.json(users);
 };
 
 const createUser = async (req, res) => {
-  const { name, username, password, role } = req.body;
+  const { name, username, password, role, mobile, branchId } = req.body;
   if (!name || !username || !password || !role) {
     return res.status(400).json({ message: 'name, username, password, role are required' });
   }
@@ -18,10 +18,22 @@ const createUser = async (req, res) => {
   const exists = await prisma.user.findUnique({ where: { username } });
   if (exists) return res.status(409).json({ message: 'Username already taken' });
 
+  if (mobile) {
+    const mobileExists = await prisma.user.findUnique({ where: { mobile } });
+    if (mobileExists) return res.status(409).json({ message: 'Mobile number already registered' });
+  }
+
   const hashed = await bcrypt.hash(password, 10);
   const user = await prisma.user.create({
-    data: { name, username, password: hashed, role },
-    select: { id: true, name: true, username: true, role: true, isActive: true },
+    data: {
+      name,
+      username,
+      password: hashed,
+      role,
+      mobile: mobile || null,
+      branchId: branchId ? parseInt(branchId) : null,
+    },
+    select: { id: true, name: true, username: true, mobile: true, role: true, isActive: true, branchId: true },
   });
   return res.status(201).json(user);
 };
@@ -38,17 +50,20 @@ const updateUser = async (req, res) => {
     if (taken) return res.status(409).json({ message: 'Username already taken' });
   }
 
+  const { mobile, branchId } = req.body;
   const data = {
     ...(name && { name }),
     ...(username && { username }),
     ...(role && { role }),
+    ...(mobile !== undefined && { mobile: mobile || null }),
+    ...(branchId !== undefined && { branchId: branchId ? parseInt(branchId) : null }),
   };
   if (password) data.password = await bcrypt.hash(password, 10);
 
   const user = await prisma.user.update({
     where: { id: parseInt(id) },
     data,
-    select: { id: true, name: true, username: true, role: true, isActive: true },
+    select: { id: true, name: true, username: true, mobile: true, role: true, isActive: true, branchId: true },
   });
   return res.json(user);
 };

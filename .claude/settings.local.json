@@ -86,7 +86,24 @@
       "Read(//usr/local/Cellar/**)",
       "Bash(rsvg-convert -w 1024 -h 1024 \"/Users/jegadeeswaran/Jegadees/Upcoming Projects/InvenTrack/App Icon.svg\" -o \"/Users/jegadeeswaran/Jegadees/Upcoming Projects/InvenTrack/mobile/assets/images/app_icon.png\")",
       "Bash(flutter pub *)",
-      "Bash(export PATH=\"$PATH:/Users/jegadeeswaran/flutter/bin\")"
+      "Bash(export PATH=\"$PATH:/Users/jegadeeswaran/flutter/bin\")",
+      "Bash(git branch *)",
+      "Bash(git reset *)",
+      "Bash(npm install *)",
+      "PowerShell(Start-Process \"chrome.exe\" -ArgumentList \"http://localhost:5174\")",
+      "Bash(npm start *)",
+      "Bash(curl -s http://localhost:4000/health)",
+      "Bash(Start-Process \"chrome.exe\" \"http://localhost:5175\")",
+      "PowerShell(Start-Process \"chrome\" \"http://localhost:5175\")",
+      "PowerShell(Start-Process \"chrome\" \"http://localhost:5200\")",
+      "PowerShell($date = Get-Date -Format \"yyyyMMdd_HHmmss\"; $src = \"i:\\\\Upcoming Projects\\\\Intrack\\\\InvenTrack\"; $dest = \"i:\\\\Upcoming Projects\\\\Intrack\\\\InvenTrack_backup_$date.zip\"; Compress-Archive -Path $src -DestinationPath $dest -Force; Write-Output \"Backup created: $dest\")",
+      "PowerShell($f = Get-Item \"i:\\\\Upcoming Projects\\\\Intrack\\\\InvenTrack_backup_20260502_154257.zip\"; \"$\\($f.Name\\) — $\\([math]::Round\\($f.Length/1MB, 1\\)\\) MB\")",
+      "Bash(Get-ChildItem -Path \"i:\\\\Upcoming Projects\\\\Intrack\\\\InvenTrack\" -Recurse -Directory)",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(Sort-Object)",
+      "Bash(taskkill /F /IM node.exe)",
+      "PowerShell(Get-Process node -ErrorAction SilentlyContinue)",
+      "PowerShell(Stop-Process -Force)"
     ]
   }
 }
