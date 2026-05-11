@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import api from '../api/axios';
+import Pagination from '../components/Pagination';
 
 function today() { return new Date().toISOString().split('T')[0]; }
+const noNeg = e => { if (e.key === '-' || e.key === 'e') e.preventDefault(); };
 
 function Modal({ title, onClose, children }) {
   return (
@@ -43,6 +45,9 @@ export default function PurchaseEntry() {
   const [msg, setMsg]   = useState({ type: '', text: '' });
   const [loading, setLoading] = useState(false);
 
+  const [page, setPage]         = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+
   const [viewItem, setViewItem]   = useState(null);
   const [editItem, setEditItem]   = useState(null);
   const [editForm, setEditForm]   = useState({});
@@ -61,17 +66,22 @@ export default function PurchaseEntry() {
   const editPieces   = editPkts * editPpc;
   const editTotal    = editPieces && editForm.costPerUnit ? (editPieces * parseFloat(editForm.costPerUnit)).toFixed(2) : '0.00';
 
+  const pagedPurchases = purchases.slice((page - 1) * pageSize, page * pageSize);
+
   useEffect(() => {
-    api.get('/products').then(r => setProducts(r.data));
-    api.get('/reports/stock').then(r => {
+    Promise.all([api.get('/products'), api.get('/reports/stock')]).then(([pr, sr]) => {
       const map = {};
-      r.data.forEach(p => { map[p.productId] = p.avgCostPerUnit; });
+      sr.data.forEach(p => { map[p.productId] = p.avgCostPerUnit; });
       setStockMap(map);
+      const inHandMap = Object.fromEntries(sr.data.map(x => [x.productId, x.inHand]));
+      setProducts(pr.data.map(p => ({ ...p, inHand: inHandMap[p.id] ?? 0 })));
     });
     loadPurchases();
     const interval = setInterval(() => loadPurchases(dateFilter), 30000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => { setPage(1); }, [dateFilter]);
 
   const loadPurchases = async (date = '') => {
     const r = await api.get(date ? `/purchases?date=${date}` : '/purchases');
@@ -165,7 +175,7 @@ export default function PurchaseEntry() {
                 setForm({ ...form, productId: id, packets: '', costPerUnit: p ? String(p.costPerUnit) : '' });
               }} required>
                 <option value="">Select product…</option>
-                {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                {products.map(p => <option key={p.id} value={p.id}>{p.name} ({p.inHand ?? 0} avail)</option>)}
               </select>
             </div>
           </div>
@@ -173,7 +183,7 @@ export default function PurchaseEntry() {
             <div className="form-group">
               <label>{packetLabel(selectedProduct)}</label>
               <input type="number" min="0" step="any" placeholder="0" value={form.packets}
-                onChange={e => setForm({ ...form, packets: e.target.value })} required />
+                onChange={e => setForm({ ...form, packets: e.target.value })} onKeyDown={noNeg} required />
               {pkts > 0 && ppc > 1 && (
                 <small style={{ color: 'var(--primary)', marginTop: 4, display: 'block' }}>
                   {pkts} × {ppc} = {pieces} pieces
@@ -183,7 +193,7 @@ export default function PurchaseEntry() {
             <div className="form-group">
               <label>Cost per Piece (₹)</label>
               <input type="number" min="0" step="any" placeholder="0.00" value={form.costPerUnit}
-                onChange={e => setForm({ ...form, costPerUnit: e.target.value })} required />
+                onChange={e => setForm({ ...form, costPerUnit: e.target.value })} onKeyDown={noNeg} required />
             </div>
             <div className="form-group">
               <label>Total Cost</label>
@@ -211,12 +221,13 @@ export default function PurchaseEntry() {
         {purchases.length === 0 ? (
           <p className="empty-state">No purchases found</p>
         ) : (
+          <>
           <table>
             <thead>
               <tr><th>Date</th><th>Product</th><th>Packets</th><th>Pieces</th><th>Cost/Pc</th><th>Total</th><th>Actions</th></tr>
             </thead>
             <tbody>
-              {purchases.map(p => (
+              {pagedPurchases.map(p => (
                 <tr key={p.id}>
                   <td>{new Date(p.date).toLocaleDateString('en-IN')}</td>
                   <td>{p.product?.name}</td>
@@ -235,6 +246,8 @@ export default function PurchaseEntry() {
               ))}
             </tbody>
           </table>
+          <Pagination page={page} pageSize={pageSize} total={purchases.length} onPage={setPage} onPageSize={setPageSize} />
+          </>
         )}
       </div>
 
@@ -276,7 +289,7 @@ export default function PurchaseEntry() {
               <div className="form-group">
                 <label>Product</label>
                 <select value={editForm.productId} onChange={e => setEditForm({ ...editForm, productId: e.target.value })} required>
-                  {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  {products.map(p => <option key={p.id} value={p.id}>{p.name} ({p.inHand ?? 0} avail)</option>)}
                 </select>
               </div>
             </div>
@@ -284,7 +297,7 @@ export default function PurchaseEntry() {
               <div className="form-group">
                 <label>{packetLabel(editProduct)}</label>
                 <input type="number" min="0" step="any" value={editForm.packets}
-                  onChange={e => setEditForm({ ...editForm, packets: e.target.value })} required />
+                  onChange={e => setEditForm({ ...editForm, packets: e.target.value })} onKeyDown={noNeg} required />
                 {editPkts > 0 && editPpc > 1 && (
                   <small style={{ color: 'var(--primary)', marginTop: 4, display: 'block' }}>
                     {editPkts} × {editPpc} = {editPieces} pieces
@@ -294,7 +307,7 @@ export default function PurchaseEntry() {
               <div className="form-group">
                 <label>Cost per Piece (₹)</label>
                 <input type="number" min="0" step="any" value={editForm.costPerUnit}
-                  onChange={e => setEditForm({ ...editForm, costPerUnit: e.target.value })} required />
+                  onChange={e => setEditForm({ ...editForm, costPerUnit: e.target.value })} onKeyDown={noNeg} required />
               </div>
               <div className="form-group">
                 <label>Total Cost</label>

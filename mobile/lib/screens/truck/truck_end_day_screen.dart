@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
-import '../../services/truck_service.dart';
+import '../../services/api_service.dart';
 
 class TruckEndDayScreen extends StatefulWidget {
   final Map<String, dynamic> session;
@@ -11,253 +12,223 @@ class TruckEndDayScreen extends StatefulWidget {
 }
 
 class _TruckEndDayScreenState extends State<TruckEndDayScreen> {
-  List<dynamic> _products = [];
-  Map<int, double> _soldQty = {}; // productId → total sold
-  Map<int, TextEditingController> _closingCtrl = {};
-  bool _loading = true;
   bool _saving = false;
+  String? _error;
+
+  // One controller per dispatched product
+  late final List<Map<String, dynamic>> _items;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    final dispatches = widget.session['dispatches'] as List? ?? [];
+    final soldMap    = (widget.session['summary']?['soldMap'] as Map?) ?? {};
+
+    _items = dispatches.map((d) {
+      final productId  = d['productId'] as int;
+      final dispatched = (d['quantity'] as num).toDouble();
+      final sold       = (soldMap['$productId'] as num? ??
+                          soldMap[productId]  as num? ?? 0).toDouble();
+      final remaining  = (dispatched - sold).clamp(0.0, dispatched);
+      return {
+        'productId':   productId,
+        'productName': (d['product']?['name'] as String?) ?? '',
+        'emoji':       (d['product']?['emoji'] as String?) ?? '🍦',
+        'dispatched':  dispatched,
+        'sold':        sold,
+        'remaining':   remaining,
+        'ctrl':        TextEditingController(
+                         text: remaining > 0 ? remaining.toStringAsFixed(0) : ''),
+      };
+    }).toList();
   }
 
   @override
   void dispose() {
-    for (final c in _closingCtrl.values) c.dispose();
+    for (final item in _items) {
+      (item['ctrl'] as TextEditingController).dispose();
+    }
     super.dispose();
   }
 
-  Future<void> _load() async {
-    final token = context.read<AuthService>().token!;
+  Future<void> _close() async {
+    final returns = _items
+        .map((i) {
+          final qty = double.tryParse((i['ctrl'] as TextEditingController).text) ?? 0;
+          return {'productId': i['productId'], 'quantity': qty};
+        })
+        .where((r) => (r['quantity'] as double) > 0)
+        .toList();
+
+    final auth = context.read<AuthService>();
+    setState(() { _saving = true; _error = null; });
     try {
-      final results = await Future.wait([
-        TruckService.getProducts(token),
-        TruckService.getSales(token, widget.session['id'] as int),
-      ]);
-      final products = (results[0] as List).where((p) => p['isActive'] == true).toList();
-      final sales = results[1] as List;
-
-      // Aggregate sold qty per product
-      final soldMap = <int, double>{};
-      for (final sale in sales) {
-        for (final item in (sale['items'] as List)) {
-          final pid = item['productId'] as int;
-          soldMap[pid] = (soldMap[pid] ?? 0) + (item['quantity'] as num).toDouble();
-        }
-      }
-
-      // Only show products that were sold OR need closing stock
-      final relevantProducts = products.where((p) => soldMap.containsKey(p['id'] as int)).toList();
-
-      final controllers = <int, TextEditingController>{};
-      for (final p in relevantProducts) {
-        controllers[p['id'] as int] = TextEditingController(text: '0');
-      }
-
-      if (mounted) {
-        setState(() {
-          _products = relevantProducts;
-          _soldQty = soldMap;
-          _closingCtrl = controllers;
-          _loading = false;
-        });
-      }
-    } catch (_) {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  bool get _allFilled => _products.every((p) {
-    final pid = p['id'] as int;
-    final text = _closingCtrl[pid]?.text ?? '';
-    return text.isNotEmpty && double.tryParse(text) != null && double.parse(text) >= 0;
-  });
-
-  Future<void> _closeDay() async {
-    if (!_allFilled) {
+      await ApiService.put(
+        '/truck-sessions/${widget.session['id']}/close',
+        {'returns': returns},
+        token: auth.token,
+      );
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter closing stock for all products'), backgroundColor: Colors.orange),
+        const SnackBar(
+          content: Text('Day closed. Great work today!'),
+          backgroundColor: Color(0xFF2E9E4F),
+        ),
       );
-      return;
-    }
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Close Day?'),
-        content: const Text('This will close the session. You cannot add sales after closing. Are you sure?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, foregroundColor: Colors.white),
-            child: const Text('Close Day'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-
-    setState(() => _saving = true);
-    final token = context.read<AuthService>().token!;
-    final navigator = Navigator.of(context);
-    final messenger = ScaffoldMessenger.of(context);
-
-    final closingStocks = _products.map((p) {
-      final pid = p['id'] as int;
-      return {
-        'productId': pid,
-        'closingQty': double.parse(_closingCtrl[pid]!.text),
-      };
-    }).toList();
-
-    try {
-      await TruckService.closeDay(token, widget.session['id'] as int, closingStocks);
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Day closed successfully!'), backgroundColor: Colors.green),
-      );
-      navigator.pop();
+      Navigator.of(context).pop(true);
     } catch (e) {
+      setState(() => _error = e.toString());
+    } finally {
       if (mounted) setState(() => _saving = false);
-      messenger.showSnackBar(
-        SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
-      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cs      = Theme.of(context).colorScheme;
+    final summary = widget.session['summary'] as Map<String, dynamic>?;
+    final revenue = (summary?['totalRevenue'] as num? ?? 0).toDouble();
+    final profit  = (summary?['totalProfit']  as num? ?? 0).toDouble();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('End Day — Closing Stock')),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : Column(children: [
-              // Info banner
-              Container(
-                margin: const EdgeInsets.all(12),
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
-                ),
-                child: Row(children: [
-                  const Icon(Icons.info_outline_rounded, color: Colors.orange, size: 20),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      'Enter the remaining (unsold) stock for each product.\nOpening Stock = Sold + Closing Stock',
-                      style: TextStyle(fontSize: 12, color: Colors.orange.shade800),
-                    ),
-                  ),
-                ]),
-              ),
+      appBar: AppBar(title: const Text('End Day — Return Stock')),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
 
-              if (_products.isEmpty)
-                Expanded(
-                  child: Center(
-                    child: Column(mainAxisSize: MainAxisSize.min, children: [
-                      Icon(Icons.check_circle_outline_rounded, size: 56, color: Colors.green.withValues(alpha: 0.7)),
-                      const SizedBox(height: 12),
-                      const Text('No sales recorded yet today', style: TextStyle(fontSize: 15)),
-                      const SizedBox(height: 6),
-                      Text('Record some sales before closing', style: TextStyle(fontSize: 13, color: cs.onSurface.withValues(alpha: 0.5))),
-                    ]),
-                  ),
-                )
-              else ...[
-                // Header row
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  child: Row(children: [
-                    const Expanded(flex: 3, child: Text('Product', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700))),
-                    Expanded(child: Text('Sold', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: cs.primary), textAlign: TextAlign.center)),
-                    Expanded(child: const Text('Closing', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700), textAlign: TextAlign.center)),
-                    Expanded(child: Text('Opening*', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.orange), textAlign: TextAlign.center)),
-                  ]),
-                ),
-                const Divider(height: 1),
-
-                Expanded(
-                  child: ListView.separated(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    itemCount: _products.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 6),
-                    itemBuilder: (context, i) {
-                      final p = _products[i];
-                      final pid = p['id'] as int;
-                      final sold = _soldQty[pid] ?? 0;
-                      final ctrl = _closingCtrl[pid]!;
-                      final closing = double.tryParse(ctrl.text) ?? 0;
-                      final opening = sold + closing;
-
-                      return Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: isDark ? const Color(0xFF1A2635) : Colors.white,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Row(children: [
-                          Expanded(
-                            flex: 3,
-                            child: Row(children: [
-                              Text(p['emoji'] as String? ?? '🍦', style: const TextStyle(fontSize: 16)),
-                              const SizedBox(width: 6),
-                              Expanded(child: Text(p['name'] as String, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500), maxLines: 2, overflow: TextOverflow.ellipsis)),
-                            ]),
-                          ),
-                          Expanded(
-                            child: Text('${sold.toStringAsFixed(0)}', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: cs.primary), textAlign: TextAlign.center),
-                          ),
-                          Expanded(
-                            child: SizedBox(
-                              height: 38,
-                              child: TextField(
-                                controller: ctrl,
-                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-                                decoration: InputDecoration(
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                                  filled: true,
-                                  fillColor: isDark ? const Color(0xFF243040) : const Color(0xFFF5F8FA),
-                                ),
-                                onChanged: (_) => setState(() {}),
-                              ),
-                            ),
-                          ),
-                          Expanded(
-                            child: Text('${opening.toStringAsFixed(0)}', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.orange), textAlign: TextAlign.center),
-                          ),
-                        ]),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ]),
-
-      bottomNavigationBar: _products.isEmpty
-          ? null
-          : SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: ElevatedButton.icon(
-                  onPressed: _saving ? null : _closeDay,
-                  icon: _saving
-                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                      : const Icon(Icons.lock_clock_rounded),
-                  label: Text(_saving ? 'Closing…' : 'Close Day'),
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, foregroundColor: Colors.white),
-                ),
-              ),
+          // Day summary
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xFF2E9E4F).withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFF2E9E4F).withValues(alpha: 0.3)),
             ),
+            child: Row(children: [
+              Expanded(child: _summaryItem("Today's Revenue", '₹${revenue.toStringAsFixed(0)}', cs.primary)),
+              Container(width: 1, height: 36, color: cs.onSurface.withValues(alpha: 0.1)),
+              Expanded(child: _summaryItem("Today's Profit", '₹${profit.toStringAsFixed(0)}', const Color(0xFF2E9E4F))),
+            ]),
+          ),
+          const SizedBox(height: 20),
+
+          // Info banner
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFF9800).withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Row(children: [
+              Icon(Icons.info_outline, color: Color(0xFFE65100), size: 16),
+              SizedBox(width: 8),
+              Expanded(child: Text(
+                'Enter the quantity of each product you are returning to the branch.',
+                style: TextStyle(fontSize: 12, color: Color(0xFFE65100)),
+              )),
+            ]),
+          ),
+          const SizedBox(height: 20),
+
+          Text('Return Stock', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: cs.onSurface)),
+          const SizedBox(height: 12),
+
+          // One row per product
+          ..._items.map((item) => _returnRow(item, cs)),
+
+          if (_error != null) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(children: [
+                const Icon(Icons.error_outline, color: Colors.red, size: 16),
+                const SizedBox(width: 8),
+                Expanded(child: Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 13))),
+              ]),
+            ),
+          ],
+
+          const SizedBox(height: 28),
+          ElevatedButton.icon(
+            onPressed: _saving ? null : _close,
+            icon: _saving
+                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                : const Icon(Icons.check_circle_outline_rounded),
+            label: Text(_saving ? 'Closing…' : 'Close Day & Return Stock'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF2E9E4F),
+              minimumSize: const Size(double.infinity, 50),
+            ),
+          ),
+          const SizedBox(height: 20),
+        ]),
+      ),
     );
   }
+
+  Widget _returnRow(Map<String, dynamic> item, ColorScheme cs) {
+    final ctrl       = item['ctrl'] as TextEditingController;
+    final dispatched = item['dispatched'] as double;
+    final sold       = item['sold']       as double;
+    final remaining  = item['remaining']  as double;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(children: [
+          Text(item['emoji'] as String, style: const TextStyle(fontSize: 22)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(item['productName'] as String,
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+              const SizedBox(height: 4),
+              Row(children: [
+                _mini('Loaded', dispatched.toStringAsFixed(0), cs.onSurface.withValues(alpha: 0.45)),
+                const SizedBox(width: 8),
+                _mini('Sold', sold.toStringAsFixed(0), const Color(0xFF0097A7)),
+                const SizedBox(width: 8),
+                _mini('Left', remaining.toStringAsFixed(0), cs.primary),
+              ]),
+            ]),
+          ),
+          const SizedBox(width: 12),
+          SizedBox(
+            width: 72,
+            child: TextFormField(
+              controller: ctrl,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              textAlign: TextAlign.center,
+              decoration: const InputDecoration(
+                labelText: 'Return',
+                isDense: true,
+                contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  Widget _summaryItem(String label, String value, Color color) => Column(children: [
+    Text(label, style: TextStyle(fontSize: 11, color: _labelColor(color), fontWeight: FontWeight.w500)),
+    const SizedBox(height: 4),
+    Text(value, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: color)),
+  ]);
+
+  // helper to get a muted version for the summary label
+  Color _labelColor(Color c) => c.withValues(alpha: 0.7);
+
+  Widget _mini(String label, String val, Color color) => Row(mainAxisSize: MainAxisSize.min, children: [
+    Text('$label: ', style: TextStyle(fontSize: 10, color: color.withValues(alpha: 0.7))),
+    Text(val, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: color)),
+  ]);
 }

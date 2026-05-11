@@ -9,10 +9,7 @@ const login = async (req, res) => {
     return res.status(400).json({ message: 'Username and password are required' });
   }
 
-  // Accept username or mobile number in the username field
-  const user = await prisma.user.findFirst({
-    where: { OR: [{ username }, { mobile: username }] },
-  });
+  const user = await prisma.user.findUnique({ where: { username } });
   if (!user || !user.isActive) {
     return res.status(401).json({ message: 'Invalid credentials' });
   }
@@ -23,28 +20,21 @@ const login = async (req, res) => {
   }
 
   const token = jwt.sign(
-    { id: user.id, username: user.username, role: user.role },
+    { id: user.id, username: user.username, role: user.role, branchId: user.branchId, truckId: user.truckId },
     process.env.JWT_SECRET,
     { expiresIn: '7d' }
   );
 
   return res.json({
     token,
-    user: {
-      id: user.id,
-      name: user.name,
-      username: user.username,
-      mobile: user.mobile || null,
-      role: user.role,
-      branchId: user.branchId || null,
-    },
+    user: { id: user.id, name: user.name, username: user.username, role: user.role, saleType: user.saleType, branchId: user.branchId, truckId: user.truckId },
   });
 };
 
 const me = async (req, res) => {
   const user = await prisma.user.findUnique({
     where: { id: req.user.id },
-    select: { id: true, name: true, username: true, mobile: true, email: true, photo: true, role: true, isActive: true, branchId: true },
+    select: { id: true, name: true, username: true, email: true, photo: true, role: true, saleType: true, isActive: true, branchId: true, truckId: true },
   });
   if (!user) return res.status(404).json({ message: 'User not found' });
   return res.json(user);

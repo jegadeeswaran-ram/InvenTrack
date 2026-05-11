@@ -3,12 +3,13 @@ const prisma = require('../config/db');
 const PRODUCT_SELECT = { id: true, name: true, emoji: true, imageUrl: true, costPerUnit: true, piecesPerPacket: true };
 
 const getSales = async (req, res) => {
-  const { date } = req.query;
-  let where = {};
+  const { date, branchId, saleType } = req.query;
+  const where = {};
 
-  if (req.user.role !== 'ADMIN') {
-    where.userId = req.user.id;
-  }
+  if (req.user.role === 'SALES') where.userId = req.user.id;
+  if (req.user.role === 'BRANCH_MANAGER' && req.user.branchId) where.branchId = req.user.branchId;
+  if (branchId) where.branchId = parseInt(branchId);
+  if (saleType) where.saleType = saleType;
 
   if (date) {
     const start = new Date(date);
@@ -22,6 +23,7 @@ const getSales = async (req, res) => {
     include: {
       product: { select: PRODUCT_SELECT },
       user: { select: { id: true, name: true, username: true } },
+      branch: { select: { id: true, name: true } },
     },
     orderBy: { date: 'desc' },
   });
@@ -29,16 +31,17 @@ const getSales = async (req, res) => {
 };
 
 const createSale = async (req, res) => {
-  const { date, productId, quantity, pricePerUnit, notes } = req.body;
+  const { date, productId, quantity, pricePerUnit, notes, saleType, branchId, sessionId } = req.body;
 
   if (!date || !productId || pricePerUnit == null) {
     return res.status(400).json({ message: 'date, productId, pricePerUnit are required' });
   }
 
   const qty = parseFloat(quantity) || 0;
-  if (qty <= 0) return res.status(400).json({ message: 'quantity is required and must be > 0' });
+  if (qty <= 0) return res.status(400).json({ message: 'quantity must be > 0' });
 
   const price = parseFloat(pricePerUnit);
+  if (price < 0) return res.status(400).json({ message: 'Price per unit cannot be negative' });
   const totalRevenue = qty * price;
 
   const purchases = await prisma.purchase.findMany({
@@ -46,12 +49,9 @@ const createSale = async (req, res) => {
     select: { costPerUnit: true },
   });
 
-  let avgCostUnit = 0;
-  if (purchases.length > 0) {
-    avgCostUnit = purchases.reduce((sum, p) => sum + p.costPerUnit, 0) / purchases.length;
-  }
-
-  const profit = (price - avgCostUnit) * qty;
+  const avgCostUnit = purchases.length > 0
+    ? purchases.reduce((s, p) => s + p.costPerUnit, 0) / purchases.length
+    : 0;
 
   const sale = await prisma.sale.create({
     data: {
@@ -62,12 +62,16 @@ const createSale = async (req, res) => {
       pricePerUnit: price,
       totalRevenue,
       avgCostUnit,
-      profit,
+      profit: (price - avgCostUnit) * qty,
+      saleType: saleType || 'SHOP',
+      branchId: branchId ? parseInt(branchId) : (req.user.branchId || null),
+      sessionId: sessionId ? parseInt(sessionId) : null,
       notes: notes || null,
     },
     include: {
       product: { select: PRODUCT_SELECT },
       user: { select: { id: true, name: true, username: true } },
+      branch: { select: { id: true, name: true } },
     },
   });
   return res.status(201).json(sale);
@@ -75,11 +79,11 @@ const createSale = async (req, res) => {
 
 const updateSale = async (req, res) => {
   const { id } = req.params;
-  const { date, productId, quantity, pricePerUnit, notes } = req.body;
+  const { date, productId, quantity, pricePerUnit, notes, saleType, branchId } = req.body;
 
   const qty = parseFloat(quantity) || 0;
   const price = parseFloat(pricePerUnit);
-  const totalRevenue = qty * price;
+  if (qty < 0 || price < 0) return res.status(400).json({ message: 'Quantity and price cannot be negative' });
 
   const purchases = await prisma.purchase.findMany({
     where: { productId: parseInt(productId) },
@@ -95,22 +99,24 @@ const updateSale = async (req, res) => {
       productId: parseInt(productId),
       quantity: qty,
       pricePerUnit: price,
-      totalRevenue,
+      totalRevenue: qty * price,
       avgCostUnit,
       profit: (price - avgCostUnit) * qty,
+      saleType: saleType || 'SHOP',
+      branchId: branchId ? parseInt(branchId) : undefined,
       notes: notes || null,
     },
     include: {
       product: { select: PRODUCT_SELECT },
       user: { select: { id: true, name: true, username: true } },
+      branch: { select: { id: true, name: true } },
     },
   });
   return res.json(sale);
 };
 
 const deleteSale = async (req, res) => {
-  const { id } = req.params;
-  await prisma.sale.delete({ where: { id: parseInt(id) } });
+  await prisma.sale.delete({ where: { id: parseInt(req.params.id) } });
   return res.json({ message: 'Sale deleted' });
 };
 

@@ -1,111 +1,64 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import '../config/app_config.dart';
 
 class ApiService {
-  static const _storage = FlutterSecureStorage();
-  static const _keyAccess  = 'access_token';
-  static const _keyRefresh = 'refresh_token';
+  // Change this to your production Railway URL before building APK
+  static const String baseUrl = 'http://localhost:4000/api';
 
-  static Future<Map<String, String>> _headers({bool requiresAuth = true}) async {
+  static Future<Map<String, String>> _headers(String? token) async {
     final headers = {'Content-Type': 'application/json'};
-    if (requiresAuth) {
-      final token = await _storage.read(key: _keyAccess);
-      if (token != null) headers['Authorization'] = 'Bearer $token';
-    }
+    if (token != null) headers['Authorization'] = 'Bearer $token';
     return headers;
   }
 
-  static Future<bool> _tryRefresh() async {
-    try {
-      final refresh = await _storage.read(key: _keyRefresh);
-      if (refresh == null) return false;
-      final res = await http.post(
-        Uri.parse('${AppConfig.baseUrl}/auth/refresh'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'refreshToken': refresh}),
-      );
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body)['data'];
-        await _storage.write(key: _keyAccess,  value: data['accessToken']);
-        await _storage.write(key: _keyRefresh, value: data['refreshToken']);
-        return true;
-      }
-    } catch (_) {}
-    return false;
-  }
-
-  static Future<dynamic> get(String url, {bool requiresAuth = true}) async {
-    var res = await http.get(Uri.parse(url), headers: await _headers(requiresAuth: requiresAuth));
-    if (res.statusCode == 401 && requiresAuth && await _tryRefresh()) {
-      res = await http.get(Uri.parse(url), headers: await _headers(requiresAuth: requiresAuth));
-    }
-    _check(res);
+  static Future<dynamic> get(String path, {String? token}) async {
+    final res = await http.get(Uri.parse('$baseUrl$path'), headers: await _headers(token));
+    _checkStatus(res);
     return jsonDecode(res.body);
   }
 
-  static Future<dynamic> post(String url, Map<String, dynamic> body, {bool requiresAuth = true}) async {
-    var res = await http.post(
-      Uri.parse(url),
-      headers: await _headers(requiresAuth: requiresAuth),
-      body: jsonEncode(body),
-    );
-    if (res.statusCode == 401 && requiresAuth && await _tryRefresh()) {
-      res = await http.post(
-        Uri.parse(url),
-        headers: await _headers(requiresAuth: requiresAuth),
-        body: jsonEncode(body),
-      );
-    }
-    _check(res);
+  static Future<dynamic> post(String path, Map<String, dynamic> body, {String? token}) async {
+    final res = await http.post(Uri.parse('$baseUrl$path'), headers: await _headers(token), body: jsonEncode(body));
+    _checkStatus(res);
     return jsonDecode(res.body);
   }
 
-  static Future<dynamic> put(String url, Map<String, dynamic> body, {bool requiresAuth = true}) async {
-    var res = await http.put(
-      Uri.parse(url),
-      headers: await _headers(requiresAuth: requiresAuth),
-      body: jsonEncode(body),
-    );
-    if (res.statusCode == 401 && requiresAuth && await _tryRefresh()) {
-      res = await http.put(
-        Uri.parse(url),
-        headers: await _headers(requiresAuth: requiresAuth),
-        body: jsonEncode(body),
-      );
-    }
-    _check(res);
+  static Future<dynamic> put(String path, Map<String, dynamic> body, {String? token}) async {
+    final res = await http.put(Uri.parse('$baseUrl$path'), headers: await _headers(token), body: jsonEncode(body));
+    _checkStatus(res);
     return jsonDecode(res.body);
   }
 
-  static Future<dynamic> patch(String url, {Map<String, dynamic>? body, bool requiresAuth = true}) async {
-    var res = await http.patch(
-      Uri.parse(url),
-      headers: await _headers(requiresAuth: requiresAuth),
-      body: body != null ? jsonEncode(body) : null,
-    );
-    if (res.statusCode == 401 && requiresAuth && await _tryRefresh()) {
-      res = await http.patch(
-        Uri.parse(url),
-        headers: await _headers(requiresAuth: requiresAuth),
-        body: body != null ? jsonEncode(body) : null,
-      );
-    }
-    _check(res);
+  static Future<dynamic> patch(String path, {Map<String, dynamic>? body, String? token}) async {
+    final res = await http.patch(Uri.parse('$baseUrl$path'), headers: await _headers(token), body: body != null ? jsonEncode(body) : null);
+    _checkStatus(res);
     return jsonDecode(res.body);
   }
 
-  static Future<dynamic> delete(String url, {bool requiresAuth = true}) async {
-    var res = await http.delete(Uri.parse(url), headers: await _headers(requiresAuth: requiresAuth));
-    if (res.statusCode == 401 && requiresAuth && await _tryRefresh()) {
-      res = await http.delete(Uri.parse(url), headers: await _headers(requiresAuth: requiresAuth));
-    }
-    _check(res);
+  static Future<dynamic> uploadFile(
+    String path,
+    List<int> bytes,
+    String filename, {
+    String? token,
+    String fieldName = 'image',
+  }) async {
+    final uri = Uri.parse('$baseUrl$path');
+    final req = http.MultipartRequest('POST', uri);
+    if (token != null) req.headers['Authorization'] = 'Bearer $token';
+    req.files.add(http.MultipartFile.fromBytes(fieldName, bytes, filename: filename));
+    final streamed = await req.send();
+    final res = await http.Response.fromStream(streamed);
+    _checkStatus(res);
     return jsonDecode(res.body);
   }
 
-  static void _check(http.Response res) {
+  static Future<dynamic> delete(String path, {String? token}) async {
+    final res = await http.delete(Uri.parse('$baseUrl$path'), headers: await _headers(token));
+    _checkStatus(res);
+    return jsonDecode(res.body);
+  }
+
+  static void _checkStatus(http.Response res) {
     if (res.statusCode < 200 || res.statusCode >= 300) {
       final body = jsonDecode(res.body);
       throw ApiException(body['message'] ?? 'Request failed (${res.statusCode})');

@@ -1,118 +1,235 @@
-require('dotenv').config();
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
 
 const prisma = new PrismaClient();
 
-const MODULES = ['Sales', 'Stock', 'Dispatch', 'Closing', 'ShopSales', 'Products', 'Reports', 'Users', 'Expenses', 'Settings'];
-
-const PRODUCTS = [
-  { name: 'Mango Kulfi',         category: 'Kulfi',   sku: 'KUL-MNG-001', price: 30,  costPrice: 18, unit: 'PCS', openingStock: 200, minStockAlert: 20 },
-  { name: 'Kesar Kulfi',         category: 'Kulfi',   sku: 'KUL-KSR-002', price: 35,  costPrice: 20, unit: 'PCS', openingStock: 150, minStockAlert: 15 },
-  { name: 'Chocolate Kulfi',     category: 'Kulfi',   sku: 'KUL-CHC-003', price: 40,  costPrice: 24, unit: 'PCS', openingStock: 180, minStockAlert: 20 },
-  { name: 'Mixed Fruit Kulfi',   category: 'Kulfi',   sku: 'KUL-MXF-004', price: 35,  costPrice: 20, unit: 'PCS', openingStock: 120, minStockAlert: 10 },
-  { name: 'Rose Kulfi',          category: 'Special', sku: 'KUL-RSE-005', price: 45,  costPrice: 28, unit: 'PCS', openingStock: 100, minStockAlert: 10 },
-  { name: 'Kesar Badam Kulfi',   category: 'Premium', sku: 'KUL-KBD-006', price: 55,  costPrice: 34, unit: 'PCS', openingStock: 80,  minStockAlert: 8  },
-  { name: 'Dry Fruit Kulfi',     category: 'Premium', sku: 'KUL-DRF-007', price: 60,  costPrice: 38, unit: 'PCS', openingStock: 60,  minStockAlert: 6  },
-  { name: 'Pista Kulfi',         category: 'Premium', sku: 'KUL-PST-008', price: 50,  costPrice: 31, unit: 'PCS', openingStock: 90,  minStockAlert: 8  },
-  { name: 'Coconut Kulfi',       category: 'Kulfi',   sku: 'KUL-CCN-009', price: 32,  costPrice: 19, unit: 'PCS', openingStock: 130, minStockAlert: 12 },
-  { name: 'Strawberry Kulfi',    category: 'Kulfi',   sku: 'KUL-STB-010', price: 35,  costPrice: 21, unit: 'PCS', openingStock: 110, minStockAlert: 10 },
-  { name: 'Kulfi Family Box',    category: 'Box',     sku: 'KUL-BX-011',  price: 200, costPrice: 130,unit: 'BOX', openingStock: 40,  minStockAlert: 5  },
-  { name: 'Assorted Kulfi Box',  category: 'Box',     sku: 'KUL-BX-012',  price: 250, costPrice: 160,unit: 'BOX', openingStock: 30,  minStockAlert: 5  },
+const FLAVOURS = [
+  { name: 'Kesar Badam',      stickCost: 25.5 },
+  { name: 'Shahi Gulab',      stickCost: 25.5 },
+  { name: 'Black Current',    stickCost: 25.5 },
+  { name: 'Dry Fruit',        stickCost: 29   },
+  { name: 'Chocolate',        stickCost: 25.5 },
+  { name: 'Guava',            stickCost: 25.5 },
+  { name: 'Mango Malai',      stickCost: 23.5 },
+  { name: 'Strawberry Malai', stickCost: 23.5 },
+  { name: 'Kesar Kajoor',     stickCost: 25.5 },
+  { name: 'Kesar Pista',      stickCost: 25.5 },
+  { name: 'Gulkan',           stickCost: 25.5 },
+  { name: 'Coconut',          stickCost: 26   },
+  { name: 'Water Melon',      stickCost: 25.5 },
+  { name: 'Green Apple',      stickCost: 25.5 },
+  { name: 'Custard Apple',    stickCost: 25.5 },
+  { name: 'Blue Berry',       stickCost: 25.5 },
+  { name: 'Pista Badam',      stickCost: 25.5 },
+  { name: 'Malai Kulfi',      stickCost: 23   },
 ];
 
 async function main() {
-  console.log('Seeding Kulfi ICE InvenTrack v2 database...');
+  console.log('🌱  Seeding InvenTrack — initial setup...\n');
 
-  // Branches
-  const branch1 = await prisma.branch.upsert({
-    where: { id: 1 },
-    update: {},
-    create: { id: 1, name: 'Main Branch', address: '123 Main Street, Chennai', phone: '9876543210' },
+  // ── Clear all tables (reverse dependency order) ────────────────────────────
+  await prisma.payment.deleteMany();
+  await prisma.bulkOrderItem.deleteMany();
+  await prisma.bulkOrder.deleteMany();
+  await prisma.customer.deleteMany();
+  await prisma.expense.deleteMany();
+  await prisma.truckReturn.deleteMany();
+  await prisma.truckDispatch.deleteMany();
+  await prisma.sale.deleteMany();
+  await prisma.truckSession.deleteMany();
+  await prisma.stockTransaction.deleteMany();
+  await prisma.purchase.deleteMany();
+  await prisma.product.deleteMany();
+  await prisma.user.deleteMany();
+  await prisma.truck.deleteMany();
+  await prisma.branch.deleteMany();
+  await prisma.rolePermission.deleteMany();
+  await prisma.customRole.deleteMany();
+  await prisma.companySetting.deleteMany();
+  console.log('  ✓ Cleared all tables');
+
+  // ── Branches ───────────────────────────────────────────────────────────────
+  const mainBranch = await prisma.branch.create({
+    data: { name: 'Main Branch', location: 'Chennai — T. Nagar (HQ)' },
   });
-
-  const branch2 = await prisma.branch.upsert({
-    where: { id: 2 },
-    update: {},
-    create: { id: 2, name: 'North Branch', address: '456 North Avenue, Chennai', phone: '9876543211' },
+  const northBranch = await prisma.branch.create({
+    data: { name: 'North Branch', location: 'Chennai — Anna Nagar' },
   });
-
-  console.log('Branches:', branch1.name, branch2.name);
-
-  // Users
-  const adminHash   = await bcrypt.hash('admin@123', 10);
-  const managerHash = await bcrypt.hash('manager@123', 10);
-  const salesHash   = await bcrypt.hash('sales@123', 10);
-
-  const admin = await prisma.user.upsert({
-    where:  { email: 'admin@kulfi.com' },
-    update: {},
-    create: { name: 'Admin User', email: 'admin@kulfi.com', mobile: '9000000001', passwordHash: adminHash, role: 'ADMIN' },
+  const southBranch = await prisma.branch.create({
+    data: { name: 'South Branch', location: 'Chennai — Adyar' },
   });
+  console.log('  ✓ Branches');
 
-  await prisma.user.upsert({
-    where:  { email: 'manager@kulfi.com' },
-    update: {},
-    create: { name: 'Branch Manager', email: 'manager@kulfi.com', mobile: '9000000002', passwordHash: managerHash, role: 'BRANCH_MANAGER', branchId: branch1.id },
-  });
+  // ── Trucks ─────────────────────────────────────────────────────────────────
+  const truck1 = await prisma.truck.create({ data: { name: 'Truck 1 — Beas',   plateNumber: 'TN01AB1234', branchId: mainBranch.id } });
+  const truck2 = await prisma.truck.create({ data: { name: 'Truck 2 — Chenab', plateNumber: 'TN01CD5678', branchId: mainBranch.id } });
+  const truck3 = await prisma.truck.create({ data: { name: 'Truck 3 — Gomti',  plateNumber: 'TN02EF9012', branchId: northBranch.id } });
+  const truck4 = await prisma.truck.create({ data: { name: 'Truck 4 — Yamuna', plateNumber: 'TN03GH3456', branchId: southBranch.id } });
+  console.log('  ✓ Trucks');
 
-  await prisma.user.upsert({
-    where:  { email: 'sales@kulfi.com' },
-    update: {},
-    create: { name: 'Sales Person One', email: 'sales@kulfi.com', mobile: '9000000003', passwordHash: salesHash, role: 'SALESPERSON', branchId: branch1.id },
-  });
+  // ── Users ──────────────────────────────────────────────────────────────────
+  const adminPwd   = await bcrypt.hash('admin123', 10);
+  const managerPwd = await bcrypt.hash('manager123', 10);
+  const salesPwd   = await bcrypt.hash('sales123', 10);
 
-  await prisma.user.upsert({
-    where:  { email: 'sales2@kulfi.com' },
-    update: {},
-    create: { name: 'Sales Person Two', email: 'sales2@kulfi.com', mobile: '9000000004', passwordHash: salesHash, role: 'SALESPERSON', branchId: branch1.id },
-  });
+  await prisma.user.create({ data: { name: 'Rajan Kumar',     username: 'admin',    password: adminPwd,   role: 'ADMIN',          branchId: mainBranch.id } });
+  await prisma.user.create({ data: { name: 'Priya Sharma',    username: 'manager1', password: managerPwd, role: 'BRANCH_MANAGER', branchId: mainBranch.id } });
+  await prisma.user.create({ data: { name: 'Venkat Raj',      username: 'manager2', password: managerPwd, role: 'BRANCH_MANAGER', branchId: northBranch.id } });
+  await prisma.user.create({ data: { name: 'Anitha Devi',     username: 'manager3', password: managerPwd, role: 'BRANCH_MANAGER', branchId: southBranch.id } });
+  await prisma.user.create({ data: { name: 'Mohan Das',       username: 'sales1',   password: salesPwd,   role: 'SALES', saleType: 'SHOP',  branchId: mainBranch.id } });
+  await prisma.user.create({ data: { name: 'Kavitha Nair',    username: 'sales2',   password: salesPwd,   role: 'SALES', saleType: 'SHOP',  branchId: northBranch.id } });
+  await prisma.user.create({ data: { name: 'Arjun Singh',     username: 'truck1',   password: salesPwd,   role: 'SALES', saleType: 'TRUCK', branchId: mainBranch.id,  truckId: truck1.id } });
+  await prisma.user.create({ data: { name: 'Dinesh Kumar',    username: 'truck2',   password: salesPwd,   role: 'SALES', saleType: 'TRUCK', branchId: mainBranch.id,  truckId: truck2.id } });
+  await prisma.user.create({ data: { name: 'Senthil Murugan', username: 'truck3',   password: salesPwd,   role: 'SALES', saleType: 'TRUCK', branchId: northBranch.id, truckId: truck3.id } });
+  await prisma.user.create({ data: { name: 'Ramesh Pillai',   username: 'truck4',   password: salesPwd,   role: 'SALES', saleType: 'TRUCK', branchId: southBranch.id, truckId: truck4.id } });
+  console.log('  ✓ Users');
 
-  console.log('Users seeded: admin, manager, 2 salespersons');
-
-  // Products + BranchStock
-  for (const p of PRODUCTS) {
-    const product = await prisma.product.upsert({
-      where:  { sku: p.sku },
-      update: {},
-      create: p,
-    });
-
-    for (const branch of [branch1, branch2]) {
-      await prisma.branchStock.upsert({
-        where:  { branchId_productId: { branchId: branch.id, productId: product.id } },
-        update: {},
-        create: { branchId: branch.id, productId: product.id, quantity: p.openingStock },
-      });
-    }
+  // ── Products ───────────────────────────────────────────────────────────────
+  let productCount = 0;
+  for (const f of FLAVOURS) {
+    await prisma.product.create({ data: { name: `${f.name} — Stick`, emoji: '🍡', costPerUnit: f.stickCost, sellingPrice: 40, piecesPerPacket: 6  } });
+    await prisma.product.create({ data: { name: `${f.name} — Plate`, emoji: '🍽️', costPerUnit: 45,          sellingPrice: 75, piecesPerPacket: 16 } });
+    await prisma.product.create({ data: { name: `${f.name} — Pot`,   emoji: '🪔', costPerUnit: 35,          sellingPrice: 50, piecesPerPacket: 12 } });
+    productCount += 3;
   }
+  console.log(`  ✓ Products (${productCount})`);
 
-  console.log(`Products seeded: ${PRODUCTS.length}`);
+  // ── Opening Stock ──────────────────────────────────────────────────────────
+  const allProducts = await prisma.product.findMany();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
-  // Permissions
-  const defaultPerms = {
-    BRANCH_MANAGER: { canView: true,  canCreate: true,  canEdit: true,  canDelete: false },
-    SALESPERSON:    { canView: true,  canCreate: true,  canEdit: false, canDelete: false },
+  for (const prod of allProducts) {
+    const openingQty = prod.piecesPerPacket * 50; // 50 packets/boxes as opening stock
+    await prisma.purchase.create({
+      data: {
+        date:         today,
+        productId:    prod.id,
+        manufacturer: 'Opening Stock',
+        quantity:     openingQty,
+        costPerUnit:  prod.costPerUnit,
+        totalCost:    Math.round(openingQty * prod.costPerUnit * 100) / 100,
+        notes:        'Opening stock',
+      },
+    });
+    await prisma.stockTransaction.create({
+      data: {
+        type:      'IN',
+        productId: prod.id,
+        branchId:  mainBranch.id,
+        quantity:  openingQty,
+        notes:     'Opening stock',
+        createdAt: today,
+      },
+    });
+  }
+  console.log(`  ✓ Opening Stock (${allProducts.length} products × 50 packets)`);
+
+  // ── Company Settings ───────────────────────────────────────────────────────
+  await prisma.companySetting.create({
+    data: {
+      companyName:     'Kulfi ICE Cream Co.',
+      tagline:         'Fresh · Frozen · Delicious Since 1998',
+      address:         '14/A, Ice Factory Road, T. Nagar',
+      city:            'Chennai',
+      state:           'Tamil Nadu',
+      pincode:         '600017',
+      phone:           '+91 44 2434 5678',
+      email:           'orders@kulfiice.com',
+      website:         'www.kulfiice.com',
+      gstin:           '33AABCK1234A1Z5',
+      fssai:           '10020042001234',
+      bankName:        'State Bank of India',
+      bankAccount:     '32145678901234',
+      bankIfsc:        'SBIN0001234',
+      bankAccountName: 'Kulfi ICE Cream Co.',
+      invoicePrefix:   'KIC',
+      invoiceTerms:    'Payment due within 15 days of delivery. Goods once sold will not be taken back. Subject to Chennai jurisdiction.',
+    },
+  });
+  console.log('  ✓ Company Settings');
+
+  // ── Role Permissions ───────────────────────────────────────────────────────
+  const MODULES = [
+    'dashboard', 'purchase', 'sales', 'stock', 'reports',
+    'products', 'branches', 'trucks', 'truck-sessions',
+    'expenses', 'bulk-orders', 'settings', 'media',
+  ];
+  const PERMS = {
+    ADMIN: { canView: true, canCreate: true, canEdit: true, canDelete: true },
+    BRANCH_MANAGER: {
+      dashboard:        { canView: true,  canCreate: false, canEdit: false, canDelete: false },
+      purchase:         { canView: true,  canCreate: false, canEdit: false, canDelete: false },
+      sales:            { canView: true,  canCreate: true,  canEdit: true,  canDelete: false },
+      stock:            { canView: true,  canCreate: false, canEdit: false, canDelete: false },
+      reports:          { canView: true,  canCreate: false, canEdit: false, canDelete: false },
+      products:         { canView: true,  canCreate: false, canEdit: false, canDelete: false },
+      branches:         { canView: true,  canCreate: false, canEdit: false, canDelete: false },
+      trucks:           { canView: true,  canCreate: false, canEdit: false, canDelete: false },
+      'truck-sessions': { canView: true,  canCreate: true,  canEdit: true,  canDelete: false },
+      expenses:         { canView: true,  canCreate: true,  canEdit: true,  canDelete: false },
+      'bulk-orders':    { canView: true,  canCreate: true,  canEdit: true,  canDelete: false },
+      settings:         { canView: false, canCreate: false, canEdit: false, canDelete: false },
+      media:            { canView: true,  canCreate: true,  canEdit: false, canDelete: false },
+    },
+    SALES: {
+      dashboard:        { canView: true,  canCreate: false, canEdit: false, canDelete: false },
+      purchase:         { canView: false, canCreate: false, canEdit: false, canDelete: false },
+      sales:            { canView: true,  canCreate: true,  canEdit: false, canDelete: false },
+      stock:            { canView: true,  canCreate: false, canEdit: false, canDelete: false },
+      reports:          { canView: false, canCreate: false, canEdit: false, canDelete: false },
+      products:         { canView: true,  canCreate: false, canEdit: false, canDelete: false },
+      branches:         { canView: false, canCreate: false, canEdit: false, canDelete: false },
+      trucks:           { canView: false, canCreate: false, canEdit: false, canDelete: false },
+      'truck-sessions': { canView: true,  canCreate: true,  canEdit: false, canDelete: false },
+      expenses:         { canView: false, canCreate: false, canEdit: false, canDelete: false },
+      'bulk-orders':    { canView: false, canCreate: false, canEdit: false, canDelete: false },
+      settings:         { canView: false, canCreate: false, canEdit: false, canDelete: false },
+      media:            { canView: false, canCreate: false, canEdit: false, canDelete: false },
+    },
   };
 
-  for (const role of ['BRANCH_MANAGER', 'SALESPERSON']) {
+  for (const role of ['ADMIN', 'BRANCH_MANAGER', 'SALES']) {
     for (const module of MODULES) {
-      await prisma.permission.upsert({
-        where:  { role_module: { role, module } },
-        update: {},
-        create: { role, module, ...defaultPerms[role] },
+      const p = role === 'ADMIN' ? PERMS.ADMIN : PERMS[role][module];
+      await prisma.rolePermission.create({ data: { role, module, ...p } });
+    }
+  }
+  console.log('  ✓ Role Permissions');
+
+  // ── Custom Roles ───────────────────────────────────────────────────────────
+  const customRoles = [
+    { name: 'DELIVERY_AGENT', label: 'Delivery Agent', color: '#F97316' },
+    { name: 'ACCOUNTANT',     label: 'Accountant',     color: '#06B6D4' },
+  ];
+  for (const cr of customRoles) {
+    await prisma.customRole.create({ data: cr });
+    for (const module of MODULES) {
+      await prisma.rolePermission.create({
+        data: {
+          role: cr.name, module,
+          canView:   cr.name === 'ACCOUNTANT',
+          canCreate: false, canEdit: false, canDelete: false,
+        },
       });
     }
   }
+  console.log('  ✓ Custom Roles');
 
-  console.log('Permissions seeded');
-  console.log('\nSeed complete!');
-  console.log('Credentials:');
-  console.log('  Admin:   admin@kulfi.com   / admin@123');
-  console.log('  Manager: manager@kulfi.com / manager@123');
-  console.log('  Sales:   sales@kulfi.com   / sales@123');
+  console.log('\n✅  Seed completed!\n');
+  console.log('  Login credentials:');
+  console.log('  ─────────────────────────────────────────');
+  console.log('  Admin           : admin    / admin123');
+  console.log('  Main Manager    : manager1 / manager123');
+  console.log('  North Manager   : manager2 / manager123');
+  console.log('  South Manager   : manager3 / manager123');
+  console.log('  Shop Sales      : sales1   / sales123');
+  console.log('  Truck Driver 1  : truck1   / sales123');
+  console.log('  Truck Driver 2  : truck2   / sales123');
+  console.log('  Truck Driver 3  : truck3   / sales123');
+  console.log('  Truck Driver 4  : truck4   / sales123');
 }
 
 main()
   .catch((e) => { console.error(e); process.exit(1); })
-  .finally(() => prisma.$disconnect());
+  .finally(async () => { await prisma.$disconnect(); });

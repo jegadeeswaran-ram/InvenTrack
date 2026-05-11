@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import api from '../api/axios';
+import Pagination from '../components/Pagination';
 
 function today() { return new Date().toISOString().split('T')[0]; }
+const noNeg = e => { if (e.key === '-' || e.key === 'e') e.preventDefault(); };
 
 function Modal({ title, onClose, children }) {
   return (
@@ -37,10 +39,14 @@ function packetsDisplay(item) {
 export default function SalesEntry() {
   const [products, setProducts] = useState([]);
   const [sales, setSales]       = useState([]);
+  const [branches, setBranches] = useState([]);
   const [dateFilter, setDateFilter] = useState('');
-  const [form, setForm] = useState({ date: today(), productId: '', quantity: '', pricePerUnit: '', notes: '' });
+  const [form, setForm] = useState({ date: today(), productId: '', quantity: '', pricePerUnit: '', notes: '', saleType: 'SHOP', branchId: '' });
   const [msg, setMsg]   = useState({ type: '', text: '' });
   const [loading, setLoading] = useState(false);
+
+  const [page, setPage]         = useState(1);
+  const [pageSize, setPageSize] = useState(20);
 
   const [viewItem, setViewItem]   = useState(null);
   const [editItem, setEditItem]   = useState(null);
@@ -54,12 +60,20 @@ export default function SalesEntry() {
   const editPieces  = parseFloat(editForm.quantity) || 0;
   const editRevenue = editPieces && editForm.pricePerUnit ? (editPieces * parseFloat(editForm.pricePerUnit)).toFixed(2) : '0.00';
 
+  const pagedSales = sales.slice((page - 1) * pageSize, page * pageSize);
+
   useEffect(() => {
-    api.get('/products').then(r => setProducts(r.data));
+    Promise.all([api.get('/products'), api.get('/reports/stock')]).then(([pr, sr]) => {
+      const stockMap = Object.fromEntries(sr.data.map(x => [x.productId, x.inHand]));
+      setProducts(pr.data.map(p => ({ ...p, inHand: stockMap[p.id] ?? 0 })));
+    });
+    api.get('/branches').then(r => setBranches(r.data)).catch(() => {});
     loadSales();
     const interval = setInterval(() => loadSales(dateFilter), 30000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => { setPage(1); }, [dateFilter]);
 
   const loadSales = async (date = '') => {
     const r = await api.get(date ? `/sales?date=${date}` : '/sales');
@@ -77,9 +91,11 @@ export default function SalesEntry() {
         quantity: parseFloat(form.quantity),
         pricePerUnit: parseFloat(form.pricePerUnit),
         notes: form.notes || null,
+        saleType: form.saleType,
+        branchId: form.branchId ? parseInt(form.branchId) : undefined,
       });
       setMsg({ type: 'success', text: 'Sale entry saved!' });
-      setForm({ date: today(), productId: '', quantity: '', pricePerUnit: '', notes: '' });
+      setForm({ date: today(), productId: '', quantity: '', pricePerUnit: '', notes: '', saleType: 'SHOP', branchId: '' });
       loadSales(dateFilter);
     } catch (err) {
       setMsg({ type: 'error', text: err.response?.data?.message || 'Error saving sale' });
@@ -150,20 +166,38 @@ export default function SalesEntry() {
                 setForm({ ...form, productId: e.target.value, quantity: '', pricePerUnit: p ? String(p.sellingPrice) : form.pricePerUnit });
               }} required>
                 <option value="">Select product…</option>
-                {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                {products.map(p => <option key={p.id} value={p.id}>{p.name} ({p.inHand ?? 0} avail)</option>)}
               </select>
             </div>
             <div className="form-group">
               <label>Pieces</label>
               <input type="number" min="0" step="any" placeholder="0" value={form.quantity}
-                onChange={e => setForm({ ...form, quantity: e.target.value })} required />
+                onChange={e => setForm({ ...form, quantity: e.target.value })} onKeyDown={noNeg} required />
             </div>
+          </div>
+          <div className="form-row cols-2" style={{ marginBottom: 0 }}>
+            <div className="form-group">
+              <label>Sale Type</label>
+              <select value={form.saleType} onChange={e => setForm({ ...form, saleType: e.target.value })}>
+                <option value="SHOP">🏪 Shop Sale</option>
+                <option value="TRUCK">🚚 Truck Sale</option>
+              </select>
+            </div>
+            {branches.length > 0 && (
+              <div className="form-group">
+                <label>Branch</label>
+                <select value={form.branchId} onChange={e => setForm({ ...form, branchId: e.target.value })}>
+                  <option value="">— Auto (from profile) —</option>
+                  {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                </select>
+              </div>
+            )}
           </div>
           <div className="form-row cols-3">
             <div className="form-group">
               <label>Price per Piece (₹)</label>
               <input type="number" min="0" step="any" placeholder="0.00" value={form.pricePerUnit}
-                onChange={e => setForm({ ...form, pricePerUnit: e.target.value })} required />
+                onChange={e => setForm({ ...form, pricePerUnit: e.target.value })} onKeyDown={noNeg} required />
             </div>
             <div className="form-group">
               <label>Total Revenue</label>
@@ -191,18 +225,20 @@ export default function SalesEntry() {
         {sales.length === 0 ? (
           <p className="empty-state">No sales found</p>
         ) : (
+          <>
           <table>
             <thead>
-              <tr><th>Date</th><th>Product</th><th>Sold by</th><th>Pieces</th><th>Price/Pc</th><th>Revenue</th><th>Profit</th><th>Actions</th></tr>
+              <tr><th>Date</th><th>Product</th><th>Type</th><th>Branch</th><th>Sold by</th><th>Pieces</th><th>Revenue</th><th>Profit</th><th>Actions</th></tr>
             </thead>
             <tbody>
-              {sales.map(s => (
+              {pagedSales.map(s => (
                 <tr key={s.id}>
-                  <td>{new Date(s.date).toLocaleDateString('en-IN')}</td>
-                  <td>{s.product?.name}</td>
-                  <td>{s.user?.name}</td>
+                  <td style={{ fontSize: 12 }}>{new Date(s.date).toLocaleDateString('en-IN')}</td>
+                  <td style={{ fontSize: 12 }}>{s.product?.name}</td>
+                  <td><span className={`badge ${s.saleType === 'TRUCK' ? 'badge-sales' : 'badge-admin'}`}>{s.saleType === 'TRUCK' ? '🚚' : '🏪'} {s.saleType}</span></td>
+                  <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{s.branch?.name || '—'}</td>
+                  <td style={{ fontSize: 12 }}>{s.user?.name}</td>
                   <td>{s.quantity}</td>
-                  <td>₹{s.pricePerUnit}</td>
                   <td>₹{s.totalRevenue.toFixed(2)}</td>
                   <td style={{ fontWeight: 600, color: s.profit >= 0 ? 'var(--success)' : 'var(--danger)' }}>₹{s.profit.toFixed(2)}</td>
                   <td>
@@ -216,6 +252,8 @@ export default function SalesEntry() {
               ))}
             </tbody>
           </table>
+          <Pagination page={page} pageSize={pageSize} total={sales.length} onPage={setPage} onPageSize={setPageSize} />
+          </>
         )}
       </div>
 
@@ -262,7 +300,7 @@ export default function SalesEntry() {
                   const p = products.find(p => String(p.id) === e.target.value);
                   setEditForm({ ...editForm, productId: e.target.value, pricePerUnit: p ? String(p.sellingPrice) : editForm.pricePerUnit });
                 }} required>
-                  {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  {products.map(p => <option key={p.id} value={p.id}>{p.name} ({p.inHand ?? 0} avail)</option>)}
                 </select>
               </div>
             </div>
@@ -270,12 +308,12 @@ export default function SalesEntry() {
               <div className="form-group">
                 <label>Pieces</label>
                 <input type="number" min="0" step="any" value={editForm.quantity}
-                  onChange={e => setEditForm({ ...editForm, quantity: e.target.value })} required />
+                  onChange={e => setEditForm({ ...editForm, quantity: e.target.value })} onKeyDown={noNeg} required />
               </div>
               <div className="form-group">
                 <label>Price per Piece (₹)</label>
                 <input type="number" min="0" step="any" value={editForm.pricePerUnit}
-                  onChange={e => setEditForm({ ...editForm, pricePerUnit: e.target.value })} required />
+                  onChange={e => setEditForm({ ...editForm, pricePerUnit: e.target.value })} onKeyDown={noNeg} required />
               </div>
               <div className="form-group">
                 <label>Total Revenue</label>

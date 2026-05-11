@@ -1,180 +1,243 @@
 const prisma = require('../config/db');
 
-const SESSION_INCLUDE = {
-  truck: { select: { id: true, name: true, plateNo: true } },
-  branch: { select: { id: true, name: true } },
-  user: { select: { id: true, name: true } },
-};
+const PRODUCT_SELECT = { id: true, name: true, emoji: true, imageUrl: true, sellingPrice: true, costPerUnit: true };
 
-const startDay = async (req, res) => {
-  const { truckId, branchId } = req.body;
-  const userId = req.user.id;
-
-  if (!truckId || !branchId) {
-    return res.status(400).json({ message: 'truckId and branchId are required' });
-  }
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-
-  const existing = await prisma.truckSession.findFirst({
-    where: { userId, startTime: { gte: today, lt: tomorrow } },
-    include: SESSION_INCLUDE,
-  });
-
-  if (existing) {
-    if (existing.status === 'OPEN') {
-      return res.json({ session: existing, alreadyOpen: true });
+// Get sessions (admin sees all, others see own)
+const getSessions = async (req, res) => {
+  try {
+    const { truckId, date, status } = req.query;
+    const where = {};
+    if (req.user.role === 'SALES') where.userId = req.user.id;
+    if (truckId) where.truckId = parseInt(truckId);
+    if (status) where.status = status;
+    if (date) {
+      const start = new Date(date);
+      const end = new Date(date);
+      end.setDate(end.getDate() + 1);
+      where.date = { gte: start, lt: end };
     }
-    return res.status(400).json({ message: 'A session already exists for today' });
-  }
 
-  const session = await prisma.truckSession.create({
-    data: {
-      userId,
-      truckId: parseInt(truckId),
-      branchId: parseInt(branchId),
-    },
-    include: SESSION_INCLUDE,
-  });
-
-  return res.status(201).json({ session });
-};
-
-const getTodaySession = async (req, res) => {
-  const userId = req.user.id;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-
-  const session = await prisma.truckSession.findFirst({
-    where: { userId, startTime: { gte: today, lt: tomorrow } },
-    include: SESSION_INCLUDE,
-  });
-
-  return res.json({ session: session || null });
-};
-
-const getSessionById = async (req, res) => {
-  const { id } = req.params;
-  const session = await prisma.truckSession.findUnique({
-    where: { id: parseInt(id) },
-    include: {
-      ...SESSION_INCLUDE,
-      sales: {
-        include: {
-          items: {
-            include: { product: { select: { id: true, name: true, emoji: true } } },
-          },
-        },
-        orderBy: { timestamp: 'desc' },
-      },
-      closingStock: {
-        include: { product: { select: { id: true, name: true, emoji: true } } },
-      },
-    },
-  });
-  if (!session) return res.status(404).json({ message: 'Session not found' });
-  return res.json(session);
-};
-
-const closeDay = async (req, res) => {
-  const { id } = req.params;
-  const { closingStocks } = req.body;
-  // closingStocks: [{ productId, closingQty }]
-
-  if (!closingStocks || !Array.isArray(closingStocks) || closingStocks.length === 0) {
-    return res.status(400).json({ message: 'closingStocks array is required' });
-  }
-
-  const sessionId = parseInt(id);
-  const session = await prisma.truckSession.findUnique({
-    where: { id: sessionId },
-    include: { sales: { include: { items: true } } },
-  });
-
-  if (!session) return res.status(404).json({ message: 'Session not found' });
-  if (session.status === 'CLOSED') return res.status(400).json({ message: 'Session already closed' });
-
-  const isOwner = session.userId === req.user.id;
-  const isPrivileged = req.user.role === 'ADMIN' || req.user.role === 'BRANCH_MANAGER';
-  if (!isOwner && !isPrivileged) {
-    return res.status(403).json({ message: 'Not authorized to close this session' });
-  }
-
-  // Aggregate sold qty per product across all sales
-  const soldMap = {};
-  for (const sale of session.sales) {
-    for (const item of sale.items) {
-      soldMap[item.productId] = (soldMap[item.productId] || 0) + item.quantity;
-    }
-  }
-
-  const closingData = closingStocks.map(({ productId, closingQty }) => {
-    const pid = parseInt(productId);
-    const soldQty = soldMap[pid] || 0;
-    const closing = parseFloat(closingQty);
-    return {
-      sessionId,
-      productId: pid,
-      soldQty,
-      closingQty: closing,
-      openingQty: soldQty + closing,
-    };
-  });
-
-  const result = await prisma.$transaction(async (tx) => {
-    await tx.closingStock.deleteMany({ where: { sessionId } });
-    await tx.closingStock.createMany({ data: closingData });
-
-    return tx.truckSession.update({
-      where: { id: sessionId },
-      data: { status: 'CLOSED', endTime: new Date() },
+    const sessions = await prisma.truckSession.findMany({
+      where,
       include: {
-        ...SESSION_INCLUDE,
-        closingStock: {
-          include: { product: { select: { id: true, name: true, emoji: true } } },
+        truck: { select: { id: true, name: true, plateNumber: true } },
+        user: { select: { id: true, name: true, username: true } },
+        dispatches: { include: { product: { select: PRODUCT_SELECT } } },
+        returns: { include: { product: { select: PRODUCT_SELECT } } },
+        sales: { select: { id: true, productId: true, quantity: true, totalRevenue: true, profit: true } },
+      },
+      orderBy: { date: 'desc' },
+    });
+
+    const enriched = sessions.map((s) => {
+      const dispatchMap = {};
+      s.dispatches.forEach((d) => {
+        dispatchMap[d.productId] = (dispatchMap[d.productId] || 0) + d.quantity;
+      });
+      const returnMap = {};
+      s.returns.forEach((r) => {
+        returnMap[r.productId] = (returnMap[r.productId] || 0) + r.quantity;
+      });
+      const soldMap = {};
+      Object.keys(dispatchMap).forEach((pid) => {
+        soldMap[pid] = dispatchMap[pid] - (returnMap[pid] || 0);
+      });
+      return {
+        ...s,
+        summary: {
+          totalRevenue: s.sales.reduce((a, x) => a + x.totalRevenue, 0),
+          totalProfit: s.sales.reduce((a, x) => a + x.profit, 0),
+          soldMap,
         },
+      };
+    });
+
+    return res.json(enriched);
+  } catch (err) {
+    console.error('getSessions error:', err);
+    return res.status(500).json({ message: err.message || 'Failed to load sessions' });
+  }
+};
+
+// Start a new session (morning dispatch)
+const startSession = async (req, res) => {
+  try {
+    const { truckId, dispatches, notes } = req.body;
+    if (!truckId || !dispatches?.length) {
+      return res.status(400).json({ message: 'truckId and dispatches are required' });
+    }
+    if (dispatches.some(d => parseFloat(d.quantity) <= 0)) {
+      return res.status(400).json({ message: 'Dispatch quantities must be greater than 0' });
+    }
+
+    // Check no open session for this truck today
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const existing = await prisma.truckSession.findFirst({
+      where: { truckId: parseInt(truckId), status: 'OPEN', date: { gte: today, lt: tomorrow } },
+    });
+    if (existing) {
+      return res.status(409).json({ message: 'An open session already exists for this truck today', sessionId: existing.id });
+    }
+
+    // Sessions belong to the truck's assigned driver, not the manager who dispatches
+    const truckDriver = await prisma.user.findFirst({
+      where: { truckId: parseInt(truckId), isActive: true, saleType: 'TRUCK' },
+    });
+    if (!truckDriver) {
+      return res.status(400).json({ message: 'No active truck driver assigned to this truck. Assign a driver first.' });
+    }
+
+    const session = await prisma.truckSession.create({
+      data: {
+        truckId: parseInt(truckId),
+        userId: truckDriver.id,
+        notes: notes || null,
+        dispatches: {
+          create: dispatches.map((d) => ({
+            productId: parseInt(d.productId),
+            quantity: parseFloat(d.quantity),
+          })),
+        },
+      },
+      include: {
+        truck: { select: { id: true, name: true } },
+        dispatches: { include: { product: { select: PRODUCT_SELECT } } },
       },
     });
-  });
-
-  return res.json(result);
+    return res.status(201).json(session);
+  } catch (err) {
+    console.error('startSession error:', err);
+    return res.status(500).json({ message: err.message || 'Failed to start session' });
+  }
 };
 
-const listSessions = async (req, res) => {
-  const { branchId, date, userId: queryUserId } = req.query;
-  const where = {};
+// Close session (evening return)
+const closeSession = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { returns, notes } = req.body;
 
-  if (req.user.role === 'TRUCK_SALES') {
-    where.userId = req.user.id;
-  } else if (queryUserId) {
-    where.userId = parseInt(queryUserId);
+    const session = await prisma.truckSession.findUnique({ where: { id: parseInt(id) } });
+    if (!session) return res.status(404).json({ message: 'Session not found' });
+    if (session.status === 'CLOSED') return res.status(409).json({ message: 'Session already closed' });
+    if ((returns || []).some(r => parseFloat(r.quantity) < 0)) {
+      return res.status(400).json({ message: 'Return quantities cannot be negative' });
+    }
+
+    const updated = await prisma.truckSession.update({
+      where: { id: parseInt(id) },
+      data: {
+        status: 'CLOSED',
+        notes: notes || session.notes,
+        returns: {
+          create: (returns || []).map((r) => ({
+            productId: parseInt(r.productId),
+            quantity: parseFloat(r.quantity),
+          })),
+        },
+      },
+      include: {
+        truck: { select: { id: true, name: true } },
+        dispatches: { include: { product: { select: PRODUCT_SELECT } } },
+        returns: { include: { product: { select: PRODUCT_SELECT } } },
+        sales: { select: { id: true, quantity: true, totalRevenue: true, profit: true } },
+      },
+    });
+    return res.json(updated);
+  } catch (err) {
+    console.error('closeSession error:', err);
+    return res.status(500).json({ message: err.message || 'Failed to close session' });
   }
-
-  if (branchId) where.branchId = parseInt(branchId);
-
-  if (date) {
-    const start = new Date(date);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(date);
-    end.setDate(end.getDate() + 1);
-    where.startTime = { gte: start, lt: end };
-  }
-
-  const sessions = await prisma.truckSession.findMany({
-    where,
-    include: {
-      ...SESSION_INCLUDE,
-      _count: { select: { sales: true } },
-    },
-    orderBy: { startTime: 'desc' },
-  });
-
-  return res.json(sessions);
 };
 
-module.exports = { startDay, getTodaySession, getSessionById, closeDay, listSessions };
+// Get open session for the logged-in truck user (queries by truckId, not userId)
+const getMyOpenSession = async (req, res) => {
+  try {
+    if (!req.user.truckId) return res.json(null);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const session = await prisma.truckSession.findFirst({
+      where: { truckId: req.user.truckId, status: 'OPEN', date: { gte: today, lt: tomorrow } },
+      include: {
+        truck: { select: { id: true, name: true } },
+        dispatches: { include: { product: { select: PRODUCT_SELECT } } },
+        returns: { include: { product: { select: PRODUCT_SELECT } } },
+        sales: { select: { id: true, productId: true, quantity: true, totalRevenue: true, profit: true } },
+      },
+    });
+    if (!session) return res.json(null);
+
+    const soldMap = {};
+    session.sales.forEach((s) => {
+      soldMap[s.productId] = (soldMap[s.productId] || 0) + s.quantity;
+    });
+
+    const totalRevenue = session.sales.reduce((a, x) => a + x.totalRevenue, 0);
+    const totalProfit  = session.sales.reduce((a, x) => a + x.profit, 0);
+    return res.json({ ...session, summary: { totalRevenue, totalProfit, soldMap } });
+  } catch (err) {
+    console.error('getMyOpenSession error:', err);
+    return res.status(500).json({ message: err.message || 'Failed to load session' });
+  }
+};
+
+// Record a sale against an open session
+const recordSale = async (req, res) => {
+  try {
+    const sessionId = parseInt(req.params.id);
+    const { productId, quantity, pricePerUnit, notes } = req.body;
+
+    const session = await prisma.truckSession.findUnique({ where: { id: sessionId } });
+    if (!session) return res.status(404).json({ message: 'Session not found' });
+    if (session.status === 'CLOSED') return res.status(409).json({ message: 'Session already closed' });
+    if (req.user.role === 'SALES' && req.user.truckId && session.truckId !== req.user.truckId) {
+      return res.status(403).json({ message: 'This session does not belong to your truck' });
+    }
+
+    const qty = parseFloat(quantity) || 0;
+    if (qty <= 0) return res.status(400).json({ message: 'quantity must be > 0' });
+
+    const price = parseFloat(pricePerUnit);
+    const totalRevenue = qty * price;
+
+    const purchases = await prisma.purchase.findMany({
+      where: { productId: parseInt(productId) },
+      select: { costPerUnit: true },
+    });
+    const avgCostUnit = purchases.length > 0
+      ? purchases.reduce((s, p) => s + p.costPerUnit, 0) / purchases.length
+      : 0;
+
+    const sale = await prisma.sale.create({
+      data: {
+        date: new Date(),
+        productId: parseInt(productId),
+        userId: req.user.id,
+        quantity: qty,
+        pricePerUnit: price,
+        totalRevenue,
+        avgCostUnit,
+        profit: totalRevenue - qty * avgCostUnit,
+        saleType: 'TRUCK',
+        branchId: req.user.branchId || null,
+        sessionId,
+        notes: notes || null,
+      },
+      include: { product: { select: PRODUCT_SELECT } },
+    });
+    return res.status(201).json(sale);
+  } catch (err) {
+    console.error('recordSale error:', err);
+    return res.status(500).json({ message: err.message || 'Failed to record sale' });
+  }
+};
+
+module.exports = { getSessions, startSession, closeSession, getMyOpenSession, recordSale };

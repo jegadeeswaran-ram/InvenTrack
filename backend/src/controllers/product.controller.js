@@ -28,14 +28,18 @@ const getProducts = async (req, res) => {
 };
 
 const createProduct = async (req, res) => {
-  const { name, emoji, sellingPrice, imageUrl, piecesPerPacket } = req.body;
+  const { name, emoji, sellingPrice, costPerUnit, imageUrl, piecesPerPacket } = req.body;
   if (!name) return res.status(400).json({ message: 'Product name is required' });
+  if (sellingPrice != null && parseFloat(sellingPrice) < 0) return res.status(400).json({ message: 'Selling price cannot be negative' });
+  if (costPerUnit != null && parseFloat(costPerUnit) < 0) return res.status(400).json({ message: 'Cost per unit cannot be negative' });
+  if (piecesPerPacket != null && parseInt(piecesPerPacket) < 1) return res.status(400).json({ message: 'Pieces per packet must be at least 1' });
 
   const product = await prisma.product.create({
     data: {
       name,
       emoji: emoji || '🍦',
       sellingPrice: parseFloat(sellingPrice) || 0,
+      costPerUnit: parseFloat(costPerUnit) || 0,
       imageUrl: imageUrl || _randomImage(name),
       piecesPerPacket: parseInt(piecesPerPacket) || 1,
     },
@@ -45,7 +49,10 @@ const createProduct = async (req, res) => {
 
 const updateProduct = async (req, res) => {
   const { id } = req.params;
-  const { name, emoji, sellingPrice, imageUrl, piecesPerPacket } = req.body;
+  const { name, emoji, sellingPrice, costPerUnit, imageUrl, piecesPerPacket } = req.body;
+  if (sellingPrice != null && parseFloat(sellingPrice) < 0) return res.status(400).json({ message: 'Selling price cannot be negative' });
+  if (costPerUnit != null && parseFloat(costPerUnit) < 0) return res.status(400).json({ message: 'Cost per unit cannot be negative' });
+  if (piecesPerPacket != null && parseInt(piecesPerPacket) < 1) return res.status(400).json({ message: 'Pieces per packet must be at least 1' });
 
   const product = await prisma.product.update({
     where: { id: parseInt(id) },
@@ -53,6 +60,7 @@ const updateProduct = async (req, res) => {
       ...(name && { name }),
       ...(emoji && { emoji }),
       ...(sellingPrice !== undefined && { sellingPrice: parseFloat(sellingPrice) }),
+      ...(costPerUnit !== undefined && { costPerUnit: parseFloat(costPerUnit) }),
       imageUrl: imageUrl !== undefined ? (imageUrl || null) : undefined,
       ...(piecesPerPacket !== undefined && { piecesPerPacket: parseInt(piecesPerPacket) || 1 }),
     },

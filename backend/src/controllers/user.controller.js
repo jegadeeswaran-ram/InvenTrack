@@ -1,46 +1,53 @@
 const bcrypt = require('bcryptjs');
 const prisma = require('../config/db');
 
+const VALID_SALE_TYPES = ['SHOP', 'TRUCK'];
+
 const getUsers = async (req, res) => {
   const users = await prisma.user.findMany({
-    select: { id: true, name: true, username: true, mobile: true, role: true, isActive: true, branchId: true, createdAt: true },
+    select: {
+      id: true, name: true, username: true, role: true, saleType: true,
+      isActive: true, createdAt: true,
+      branchId: true, branch: { select: { id: true, name: true } },
+      truckId: true, truck: { select: { id: true, name: true } },
+    },
     orderBy: { createdAt: 'asc' },
   });
   return res.json(users);
 };
 
 const createUser = async (req, res) => {
-  const { name, username, password, role, mobile, branchId } = req.body;
+  const { name, username, password, role, saleType, branchId, truckId } = req.body;
   if (!name || !username || !password || !role) {
     return res.status(400).json({ message: 'name, username, password, role are required' });
+  }
+  if (saleType && !VALID_SALE_TYPES.includes(saleType)) {
+    return res.status(400).json({ message: 'saleType must be SHOP or TRUCK' });
   }
 
   const exists = await prisma.user.findUnique({ where: { username } });
   if (exists) return res.status(409).json({ message: 'Username already taken' });
 
-  if (mobile) {
-    const mobileExists = await prisma.user.findUnique({ where: { mobile } });
-    if (mobileExists) return res.status(409).json({ message: 'Mobile number already registered' });
-  }
-
   const hashed = await bcrypt.hash(password, 10);
   const user = await prisma.user.create({
     data: {
-      name,
-      username,
-      password: hashed,
-      role,
-      mobile: mobile || null,
-      branchId: branchId ? parseInt(branchId) : null,
+      name, username, password: hashed, role,
+      ...(saleType && { saleType }),
+      ...(branchId && { branchId: parseInt(branchId) }),
+      ...(truckId && { truckId: parseInt(truckId) }),
     },
-    select: { id: true, name: true, username: true, mobile: true, role: true, isActive: true, branchId: true },
+    select: {
+      id: true, name: true, username: true, role: true, saleType: true,
+      isActive: true, branchId: true, branch: { select: { id: true, name: true } },
+      truckId: true, truck: { select: { id: true, name: true } },
+    },
   });
   return res.status(201).json(user);
 };
 
 const updateUser = async (req, res) => {
   const { id } = req.params;
-  const { name, username, password, role } = req.body;
+  const { name, username, password, role, saleType, branchId, truckId } = req.body;
 
   const existing = await prisma.user.findUnique({ where: { id: parseInt(id) } });
   if (!existing) return res.status(404).json({ message: 'User not found' });
@@ -49,21 +56,28 @@ const updateUser = async (req, res) => {
     const taken = await prisma.user.findUnique({ where: { username } });
     if (taken) return res.status(409).json({ message: 'Username already taken' });
   }
+  if (saleType && !VALID_SALE_TYPES.includes(saleType)) {
+    return res.status(400).json({ message: 'saleType must be SHOP or TRUCK' });
+  }
 
-  const { mobile, branchId } = req.body;
   const data = {
     ...(name && { name }),
     ...(username && { username }),
     ...(role && { role }),
-    ...(mobile !== undefined && { mobile: mobile || null }),
-    ...(branchId !== undefined && { branchId: branchId ? parseInt(branchId) : null }),
+    ...(saleType && { saleType }),
+    ...(branchId ? { branchId: parseInt(branchId) } : branchId === null ? { branchId: null } : {}),
+    ...(truckId ? { truckId: parseInt(truckId) } : truckId === null ? { truckId: null } : {}),
   };
   if (password) data.password = await bcrypt.hash(password, 10);
 
   const user = await prisma.user.update({
     where: { id: parseInt(id) },
     data,
-    select: { id: true, name: true, username: true, mobile: true, role: true, isActive: true, branchId: true },
+    select: {
+      id: true, name: true, username: true, role: true, saleType: true,
+      isActive: true, branchId: true, branch: { select: { id: true, name: true } },
+      truckId: true, truck: { select: { id: true, name: true } },
+    },
   });
   return res.json(user);
 };

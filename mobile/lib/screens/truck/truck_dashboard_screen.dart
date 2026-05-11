@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
-import '../../services/truck_service.dart';
-import 'truck_pos_screen.dart';
+import '../../services/api_service.dart';
+import '../shell_scope.dart';
 import 'truck_end_day_screen.dart';
-import 'truck_summary_screen.dart';
 
 class TruckDashboardScreen extends StatefulWidget {
   const TruckDashboardScreen({super.key});
@@ -15,10 +15,6 @@ class TruckDashboardScreen extends StatefulWidget {
 class _TruckDashboardScreenState extends State<TruckDashboardScreen> {
   Map<String, dynamic>? _session;
   bool _loading = true;
-  List<dynamic> _trucks = [];
-  List<dynamic> _branches = [];
-  int? _selectedTruckId;
-  int? _selectedBranchId;
 
   @override
   void initState() {
@@ -27,306 +23,380 @@ class _TruckDashboardScreenState extends State<TruckDashboardScreen> {
   }
 
   Future<void> _load() async {
-    final token = context.read<AuthService>().token!;
-    final user = context.read<AuthService>().user!;
+    setState(() => _loading = true);
     try {
-      final results = await Future.wait([
-        TruckService.getTodaySession(token),
-        TruckService.getBranches(token),
-        TruckService.getTrucks(token),
-      ]);
-      if (!mounted) return;
-      setState(() {
-        _session = results[0] as Map<String, dynamic>?;
-        _branches = results[1] as List<dynamic>;
-        _trucks = results[2] as List<dynamic>;
-        // Pre-select user's branch
-        _selectedBranchId = user.branchId ?? (_branches.isNotEmpty ? _branches[0]['id'] : null);
-        _loading = false;
-      });
+      final token = context.read<AuthService>().token;
+      final data = await ApiService.get('/truck-sessions/my-session', token: token);
+      if (mounted) setState(() => _session = data as Map<String, dynamic>?);
     } catch (_) {
+      // session stays null — waiting state shown
+    } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
 
-  Future<void> _startDay() async {
-    if (_selectedTruckId == null || _selectedBranchId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a truck and branch')),
-      );
-      return;
-    }
-    final token = context.read<AuthService>().token!;
-    try {
-      final result = await TruckService.startDay(token, _selectedTruckId!, _selectedBranchId!);
-      if (!mounted) return;
-      setState(() => _session = result['session']);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(result['alreadyOpen'] == true ? 'Resuming existing session' : 'Day started!'),
-          backgroundColor: Colors.green,
-        ),
-      );
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
-        );
-      }
-    }
+  // Remaining qty for a product = dispatched - sold
+  double _remaining(int productId) {
+    final dispatches = (_session!['dispatches'] as List? ?? []);
+    final soldMap    = (_session!['summary']?['soldMap'] as Map?) ?? {};
+    final dispatched = dispatches
+        .where((d) => d['productId'] == productId)
+        .fold<double>(0, (a, d) => a + (d['quantity'] as num).toDouble());
+    final sold = (soldMap['$productId'] as num? ??
+                  soldMap[productId] as num? ?? 0).toDouble();
+    return (dispatched - sold).clamp(0, double.infinity);
   }
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cs   = Theme.of(context).colorScheme;
+    final auth = context.watch<AuthService>();
 
-    if (_loading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    final hasOpenSession = _session != null && _session!['status'] == 'OPEN';
-    final hasClosedSession = _session != null && _session!['status'] == 'CLOSED';
-
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          // Session status card
-          _StatusCard(session: _session, isDark: isDark, cs: cs),
-          const SizedBox(height: 20),
-
-          // Start Day section
-          if (_session == null) ...[
-            Text('Start Your Day', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: cs.onSurface)),
-            const SizedBox(height: 12),
-            _buildDropdown('Select Branch', _branches, _selectedBranchId, 'name',
-                (v) => setState(() => _selectedBranchId = v), isDark, cs),
-            const SizedBox(height: 10),
-            _buildDropdown(
-              'Select Truck',
-              _trucks.where((t) => _selectedBranchId == null || t['branchId'] == _selectedBranchId).toList(),
-              _selectedTruckId,
-              'name',
-              (v) => setState(() => _selectedTruckId = v),
-              isDark,
-              cs,
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: _startDay,
-              icon: const Icon(Icons.play_circle_outline_rounded),
-              label: const Text('Start Day'),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
-            ),
-          ],
-
-          // Actions for open session
-          if (hasOpenSession) ...[
-            const SizedBox(height: 8),
-            Text('Actions', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: cs.onSurface)),
-            const SizedBox(height: 12),
-            _ActionCard(
-              icon: Icons.point_of_sale_rounded,
-              label: 'New Sale',
-              subtitle: 'Add a sale transaction',
-              color: cs.primary,
-              onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => TruckPosScreen(session: _session!),
-              )).then((_) => _load()),
-            ),
-            const SizedBox(height: 10),
-            _ActionCard(
-              icon: Icons.receipt_long_rounded,
-              label: 'View Summary',
-              subtitle: 'See today\'s sales',
-              color: Colors.blue,
-              onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => TruckSummaryScreen(session: _session!),
-              )),
-            ),
-            const SizedBox(height: 10),
-            _ActionCard(
-              icon: Icons.inventory_2_rounded,
-              label: 'End Day & Close',
-              subtitle: 'Enter closing stock',
-              color: Colors.orange,
-              onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => TruckEndDayScreen(session: _session!),
-              )).then((_) => _load()),
-            ),
-          ],
-
-          // Closed session view
-          if (hasClosedSession) ...[
-            const SizedBox(height: 8),
-            _ActionCard(
-              icon: Icons.bar_chart_rounded,
-              label: 'View Day Report',
-              subtitle: 'Today\'s closed session summary',
-              color: cs.primary,
-              onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => TruckSummaryScreen(session: _session!),
-              )),
-            ),
-          ],
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('My Truck'),
+        leading: IconButton(
+          icon: const Icon(Icons.menu_rounded),
+          onPressed: () => ShellScope.of(context)?.scaffoldKey.currentState?.openDrawer(),
+        ),
+        actions: [
+          IconButton(icon: const Icon(Icons.refresh_rounded), onPressed: _load),
         ],
       ),
-    );
-  }
-
-  Widget _buildDropdown(String hint, List<dynamic> items, int? value, String labelKey,
-      ValueChanged<int?> onChanged, bool isDark, ColorScheme cs) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1A2635) : Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: isDark ? const Color(0xFF2E3E50) : const Color(0xFFDDE3EA)),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<int>(
-          value: value,
-          hint: Text(hint, style: TextStyle(color: cs.onSurface.withValues(alpha: 0.5), fontSize: 14)),
-          isExpanded: true,
-          dropdownColor: isDark ? const Color(0xFF1A2635) : Colors.white,
-          items: items.map<DropdownMenuItem<int>>((item) {
-            return DropdownMenuItem<int>(
-              value: item['id'] as int,
-              child: Text(item[labelKey] as String, style: const TextStyle(fontSize: 14)),
-            );
-          }).toList(),
-          onChanged: onChanged,
-        ),
-      ),
-    );
-  }
-}
-
-class _StatusCard extends StatelessWidget {
-  final Map<String, dynamic>? session;
-  final bool isDark;
-  final ColorScheme cs;
-
-  const _StatusCard({required this.session, required this.isDark, required this.cs});
-
-  @override
-  Widget build(BuildContext context) {
-    if (session == null) {
-      return Container(
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1A2635) : Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.orange.withValues(alpha: 0.4)),
-        ),
-        child: Row(children: [
-          const Icon(Icons.wb_sunny_outlined, color: Colors.orange, size: 28),
-          const SizedBox(width: 14),
-          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('No active session', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-            Text('Start your day to begin selling', style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.5))),
-          ]),
-        ]),
-      );
-    }
-
-    final isOpen = session!['status'] == 'OPEN';
-    final truck = session!['truck'];
-    final branch = session!['branch'];
-
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1A2635) : Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: (isOpen ? Colors.green : cs.primary).withValues(alpha: 0.4)),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Icon(isOpen ? Icons.local_shipping_rounded : Icons.check_circle_rounded,
-              color: isOpen ? Colors.green : cs.primary, size: 24),
-          const SizedBox(width: 10),
-          Text(isOpen ? 'Session Active' : 'Session Closed',
-              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15,
-                  color: isOpen ? Colors.green : cs.primary)),
-          const Spacer(),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: (isOpen ? Colors.green : cs.primary).withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(20),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : RefreshIndicator(
+              onRefresh: _load,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(20),
+                child: _session == null
+                    ? _buildWaiting(cs, auth)
+                    : _buildActive(cs, auth),
+              ),
             ),
-            child: Text(isOpen ? 'OPEN' : 'CLOSED',
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
-                    color: isOpen ? Colors.green : cs.primary)),
+    );
+  }
+
+  // ── No session yet ──────────────────────────────────────────────────────────
+
+  Widget _buildWaiting(ColorScheme cs, AuthService auth) {
+    return Column(children: [
+      const SizedBox(height: 40),
+      Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(32),
+        decoration: BoxDecoration(
+          color: cs.surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: cs.primary.withValues(alpha: 0.2)),
+        ),
+        child: Column(children: [
+          Icon(Icons.local_shipping_outlined, size: 64, color: cs.primary.withValues(alpha: 0.4)),
+          const SizedBox(height: 16),
+          Text('Waiting for Dispatch',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: cs.onSurface)),
+          const SizedBox(height: 10),
+          Text(
+            'Your truck has not been loaded yet.\nContact your manager to start today\'s dispatch.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 13, color: cs.onSurface.withValues(alpha: 0.5), height: 1.5),
+          ),
+          const SizedBox(height: 24),
+          OutlinedButton.icon(
+            onPressed: _load,
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('Check Again'),
           ),
         ]),
-        if (truck != null || branch != null) ...[
-          const SizedBox(height: 10),
-          const Divider(height: 1),
-          const SizedBox(height: 10),
-          if (truck != null)
-            _infoRow(Icons.local_shipping_outlined, '${truck['name']}${truck['plateNo'] != null ? ' · ${truck['plateNo']}' : ''}'),
-          if (branch != null) _infoRow(Icons.store_outlined, branch['name'] as String),
-        ],
+      ),
+      const SizedBox(height: 24),
+      _driverCard(cs, auth),
+    ]);
+  }
+
+  // ── Active session ──────────────────────────────────────────────────────────
+
+  Widget _buildActive(ColorScheme cs, AuthService auth) {
+    final summary    = _session!['summary'] as Map<String, dynamic>?;
+    final dispatches = (_session!['dispatches'] as List? ?? []);
+    final truck      = _session!['truck'] as Map<String, dynamic>?;
+
+    final totalRevenue = (summary?['totalRevenue'] as num? ?? 0).toDouble();
+    final totalProfit  = (summary?['totalProfit']  as num? ?? 0).toDouble();
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      // Session status bar
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFF2E9E4F).withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFF2E9E4F).withValues(alpha: 0.3)),
+        ),
+        child: Row(children: [
+          const Icon(Icons.circle, color: Color(0xFF2E9E4F), size: 9),
+          const SizedBox(width: 8),
+          Text('Session Active — ${truck?['name'] ?? ''}',
+              style: const TextStyle(color: Color(0xFF2E9E4F), fontWeight: FontWeight.w700, fontSize: 13)),
+          const Spacer(),
+          Text(
+            DateTime.now().toLocal().toString().split(' ')[0],
+            style: TextStyle(fontSize: 11, color: cs.onSurface.withValues(alpha: 0.5)),
+          ),
+        ]),
+      ),
+      const SizedBox(height: 14),
+
+      // Revenue / Profit KPIs
+      Row(children: [
+        Expanded(child: _kpi('Revenue', '₹${totalRevenue.toStringAsFixed(0)}', cs.primary)),
+        const SizedBox(width: 10),
+        Expanded(child: _kpi('Profit', '₹${totalProfit.toStringAsFixed(0)}', const Color(0xFF2E9E4F))),
       ]),
+      const SizedBox(height: 20),
+
+      Text('Loaded Stock', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: cs.onSurface)),
+      const SizedBox(height: 8),
+      Text('Tap a product to record a sale',
+          style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.45))),
+      const SizedBox(height: 12),
+
+      // Product cards with remaining qty
+      ...dispatches.map((d) {
+        final product   = d['product'] as Map<String, dynamic>?;
+        final productId = d['productId'] as int;
+        final dispatched = (d['quantity'] as num).toDouble();
+        final remaining  = _remaining(productId);
+        final sold       = dispatched - remaining;
+        final isEmpty    = remaining <= 0;
+
+        return Card(
+          margin: const EdgeInsets.only(bottom: 10),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: isEmpty ? null : () => _showSaleSheet(product, productId, remaining),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(children: [
+                Text(product?['emoji'] ?? '🍦', style: const TextStyle(fontSize: 26)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(product?['name'] ?? '',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700, fontSize: 13,
+                          color: isEmpty ? cs.onSurface.withValues(alpha: 0.35) : cs.onSurface,
+                        )),
+                    const SizedBox(height: 4),
+                    Row(children: [
+                      _tag('Loaded: ${dispatched.toStringAsFixed(0)}', cs.onSurface.withValues(alpha: 0.4)),
+                      const SizedBox(width: 6),
+                      _tag('Sold: ${sold.toStringAsFixed(0)}', const Color(0xFF0097A7)),
+                    ]),
+                  ]),
+                ),
+                const SizedBox(width: 12),
+                Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                  Text(
+                    remaining.toStringAsFixed(0),
+                    style: TextStyle(
+                      fontSize: 24, fontWeight: FontWeight.w800,
+                      color: isEmpty ? cs.onSurface.withValues(alpha: 0.3) : cs.primary,
+                    ),
+                  ),
+                  Text('remaining', style: TextStyle(fontSize: 10, color: cs.onSurface.withValues(alpha: 0.4))),
+                  if (!isEmpty)
+                    const Icon(Icons.add_circle_rounded, color: Color(0xFF0097A7), size: 18),
+                ]),
+              ]),
+            ),
+          ),
+        );
+      }),
+
+      const SizedBox(height: 24),
+
+      // End Day button
+      OutlinedButton.icon(
+        onPressed: () async {
+          final result = await Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => TruckEndDayScreen(session: _session!),
+          ));
+          if (result == true) _load();
+        },
+        icon: const Icon(Icons.nightlight_round_outlined, color: Color(0xFFE65100)),
+        label: const Text('End Day & Return Stock', style: TextStyle(color: Color(0xFFE65100))),
+        style: OutlinedButton.styleFrom(
+          side: const BorderSide(color: Color(0xFFE65100)),
+          minimumSize: const Size(double.infinity, 50),
+        ),
+      ),
+      const SizedBox(height: 24),
+      _driverCard(cs, auth),
+      const SizedBox(height: 20),
+    ]);
+  }
+
+  // ── Sale bottom sheet ───────────────────────────────────────────────────────
+
+  void _showSaleSheet(Map<String, dynamic>? product, int productId, double remaining) {
+    final qtyCtrl   = TextEditingController();
+    final priceCtrl = TextEditingController(
+        text: (product?['sellingPrice'] as num?)?.toStringAsFixed(0) ?? '');
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => StatefulBuilder(
+        builder: (sheetCtx, setSt) {
+          final cs = Theme.of(sheetCtx).colorScheme;
+          final qty   = double.tryParse(qtyCtrl.text)   ?? 0;
+          final price = double.tryParse(priceCtrl.text) ?? 0;
+          final total = qty * price;
+
+          return Padding(
+            padding: EdgeInsets.only(bottom: MediaQuery.of(sheetCtx).viewInsets.bottom),
+            child: Container(
+              decoration: BoxDecoration(
+                color: cs.surface,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              padding: const EdgeInsets.all(20),
+              child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  Text(product?['emoji'] ?? '🍦', style: const TextStyle(fontSize: 24)),
+                  const SizedBox(width: 10),
+                  Expanded(child: Text(product?['name'] ?? '',
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700))),
+                ]),
+                const SizedBox(height: 4),
+                Text('Available: ${remaining.toStringAsFixed(0)} pcs',
+                    style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.5))),
+                const SizedBox(height: 16),
+                Row(children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: qtyCtrl,
+                      autofocus: true,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      decoration: const InputDecoration(labelText: 'Quantity (pcs)'),
+                      onChanged: (_) => setSt(() {}),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextFormField(
+                      controller: priceCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
+                      decoration: const InputDecoration(labelText: 'Price/pc (₹)'),
+                      onChanged: (_) => setSt(() {}),
+                    ),
+                  ),
+                ]),
+                if (qty > 0 && price > 0) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: cs.primary.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                      Text('Total', style: TextStyle(color: cs.onSurface.withValues(alpha: 0.6), fontSize: 13)),
+                      Text('₹${total.toStringAsFixed(2)}',
+                          style: TextStyle(color: cs.primary, fontWeight: FontWeight.w800, fontSize: 16)),
+                    ]),
+                  ),
+                ],
+                const SizedBox(height: 16),
+                ElevatedButton.icon(
+                  onPressed: (qty <= 0 || qty > remaining || price <= 0)
+                      ? null
+                      : () async {
+                          final messenger = ScaffoldMessenger.of(sheetCtx);
+                          final token = context.read<AuthService>().token;
+                          try {
+                            await ApiService.post(
+                              '/truck-sessions/${_session!['id']}/sale',
+                              {'productId': productId, 'quantity': qty, 'pricePerUnit': price},
+                              token: token,
+                            );
+                            if (!sheetCtx.mounted) return;
+                            Navigator.pop(sheetCtx);
+                            _load();
+                          } catch (e) {
+                            messenger.showSnackBar(SnackBar(
+                              content: Text(e.toString()),
+                              backgroundColor: Colors.red,
+                            ));
+                          }
+                        },
+                  icon: const Icon(Icons.check_rounded),
+                  label: const Text('Confirm Sale'),
+                ),
+                if (qty > remaining)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 6),
+                    child: Text('Quantity exceeds remaining stock',
+                        style: TextStyle(color: Colors.red, fontSize: 12)),
+                  ),
+              ]),
+            ),
+          );
+        },
+      ),
     );
   }
 
-  Widget _infoRow(IconData icon, String text) => Padding(
-    padding: const EdgeInsets.only(bottom: 4),
-    child: Row(children: [
-      Icon(icon, size: 14, color: cs.onSurface.withValues(alpha: 0.5)),
-      const SizedBox(width: 6),
-      Expanded(child: Text(text, style: TextStyle(fontSize: 13, color: cs.onSurface.withValues(alpha: 0.8)))),
+  // ── Helpers ─────────────────────────────────────────────────────────────────
+
+  Widget _kpi(String label, String value, Color color) => Container(
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.08),
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: color.withValues(alpha: 0.2)),
+    ),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(label, style: TextStyle(fontSize: 11, color: color.withValues(alpha: 0.7), fontWeight: FontWeight.w600)),
+      const SizedBox(height: 4),
+      Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: color)),
     ]),
   );
-}
 
-class _ActionCard extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String subtitle;
-  final Color color;
-  final VoidCallback onTap;
+  Widget _tag(String text, Color color) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.12),
+      borderRadius: BorderRadius.circular(6),
+    ),
+    child: Text(text, style: TextStyle(fontSize: 10, color: color, fontWeight: FontWeight.w600)),
+  );
 
-  const _ActionCard({
-    required this.icon,
-    required this.label,
-    required this.subtitle,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1A2635) : Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: color.withValues(alpha: 0.25)),
+  Widget _driverCard(ColorScheme cs, AuthService auth) => Container(
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: cs.primary.withValues(alpha: 0.07),
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: Row(children: [
+      CircleAvatar(
+        backgroundColor: cs.primary,
+        radius: 18,
+        child: Text(
+          auth.user?.name.isNotEmpty == true ? auth.user!.name[0].toUpperCase() : '?',
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
         ),
-        child: Row(children: [
-          Container(
-            width: 46, height: 46,
-            decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
-            child: Icon(icon, color: color, size: 24),
-          ),
-          const SizedBox(width: 14),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(label, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-            Text(subtitle, style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5))),
-          ])),
-          Icon(Icons.arrow_forward_ios_rounded, size: 14, color: color.withValues(alpha: 0.7)),
-        ]),
       ),
-    );
-  }
+      const SizedBox(width: 12),
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(auth.user?.name ?? '', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+        Text('Truck Driver', style: TextStyle(fontSize: 11, color: cs.onSurface.withValues(alpha: 0.5))),
+      ]),
+    ]),
+  );
 }

@@ -40,6 +40,7 @@ const createPurchase = async (req, res) => {
   const resolvedCost = costPerUnit != null ? parseFloat(costPerUnit) : (product?.costPerUnit ?? 0);
 
   if (pieces <= 0) return res.status(400).json({ message: 'quantity or packets is required and must be > 0' });
+  if (resolvedCost < 0) return res.status(400).json({ message: 'Cost per unit cannot be negative' });
 
   const totalCost = pieces * resolvedCost;
 
@@ -72,6 +73,7 @@ const updatePurchase = async (req, res) => {
   }
 
   const cost = costPerUnit != null ? parseFloat(costPerUnit) : (productData?.costPerUnit ?? 0);
+  if (pieces < 0 || cost < 0) return res.status(400).json({ message: 'Quantity and cost cannot be negative' });
   const purchase = await prisma.purchase.update({
     where: { id: parseInt(id) },
     data: {

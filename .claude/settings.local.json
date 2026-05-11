@@ -103,7 +103,20 @@
       "Bash(Sort-Object)",
       "Bash(taskkill /F /IM node.exe)",
       "PowerShell(Get-Process node -ErrorAction SilentlyContinue)",
-      "PowerShell(Stop-Process -Force)"
+      "PowerShell(Stop-Process -Force)",
+      "Bash(Start-Sleep -Seconds 5)",
+      "Bash(Get-Content \"C:\\\\Users\\\\Jegadees\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\i--Upcoming-Projects-Intrack-InvenTrack\\\\0913f568-271a-4816-bc92-d524cc2405e0\\\\tasks\\\\bz1cxvih5.output\")",
+      "Bash(flutter devices *)",
+      "PowerShell(Stop-Process -Name \"dart\" -ErrorAction SilentlyContinue)",
+      "PowerShell(Stop-Process -Name \"flutter\" -ErrorAction SilentlyContinue)",
+      "Bash(flutter build *)",
+      "Bash(python3 -c \"import sys,json; lines=sys.stdin.readlines\\(\\); [print\\(json.loads\\(l\\).get\\('content',''\\)[:500] if isinstance\\(json.loads\\(l\\).get\\('content',''\\),str\\) else ''\\) for l in lines[-20:]]\")",
+      "PowerShell(Get-Content 'C:\\\\Users\\\\Jegadees\\\\.claude\\\\projects\\\\i--Upcoming-Projects-Intrack-InvenTrack\\\\74d6c0aa-c2b2-4702-94df-cc04cb422c81.jsonl' | Select-Object -Last 30 | ForEach-Object { try { $j = $_ | ConvertFrom-Json; $role = $j.role; $content = $j.content; if \\($content -is [string] -and $content.Length -gt 0\\) { \"$role : $\\($content.Substring\\(0, [Math]::Min\\(400, $content.Length\\)\\)\\)\" } } catch {} })",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('scripts',{}\\), indent=2\\)\\)\")",
+      "Bash(curl -s -X POST http://localhost:4000/api/auth/login -H \"Content-Type: application/json\" -d \"{\\\\\"username\\\\\":\\\\\"admin\\\\\",\\\\\"password\\\\\":\\\\\"admin123\\\\\"}\")",
+      "Bash(curl -s -X POST http://localhost:4000/api/auth/login -H 'Content-Type: application/json' -H 'Origin: http://localhost:5173' -d '{\"username\":\"admin\",\"password\":\"admin123\"}' -v)",
+      "Bash(pg_isready -h localhost -p 5432)",
+      "Bash(net start *)"
     ]
   }
 }
