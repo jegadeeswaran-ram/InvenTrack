@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 import '../main.dart';
 import '../services/auth_service.dart';
 import '../services/permission_service.dart';
-import '../widgets/inventrack_logo.dart';
 import 'app_shell.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -57,7 +57,17 @@ class _LoginScreenState extends State<LoginScreen> {
             padding: const EdgeInsets.all(28),
             child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
               // Logo
-              const InvenTrackLogo(width: 280, textColor: Colors.white),
+              SvgPicture.asset('assets/images/logo_splash.svg', width: 90),
+              const SizedBox(height: 12),
+              RichText(
+                text: const TextSpan(
+                  style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, letterSpacing: 2),
+                  children: [
+                    TextSpan(text: 'IN', style: TextStyle(color: Color(0xFF0095DA))),
+                    TextSpan(text: 'TRACK', style: TextStyle(color: Colors.white)),
+                  ],
+                ),
+              ),
               const SizedBox(height: 36),
 
               // Card

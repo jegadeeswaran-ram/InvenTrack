@@ -163,7 +163,7 @@ export default function BulkOrders() {
             </div>
             <div className="form-group">
               <label>Email</label>
-              <input type="email" value={form.customerEmail} onChange={e => setForm({ ...form, customerEmail: e.target.value })} placeholder="customer@email.com" />
+              <input type="text" value={form.customerEmail} onChange={e => setForm({ ...form, customerEmail: e.target.value })} placeholder="customer@email.com" />
             </div>
 
             {/* Order Info */}

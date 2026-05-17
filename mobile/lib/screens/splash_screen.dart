@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
 import '../services/permission_service.dart';
@@ -86,17 +85,13 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
               scale: _scale,
               child: FadeTransition(
                 opacity: _fade,
-                child: SvgPicture.asset(
-                  'assets/images/logo_splash.svg',
-                  width: 200,
-                ),
+                child: const InvenTrackLogo(width: 220, textColor: Colors.white),
               ),
             ),
             const SizedBox(height: 28),
             FadeTransition(
               opacity: _textFade,
               child: Column(children: [
-                const InvenTrackLogo(width: 220, textColor: Colors.white),
                 const SizedBox(height: 32),
                 const SizedBox(
                   width: 28,

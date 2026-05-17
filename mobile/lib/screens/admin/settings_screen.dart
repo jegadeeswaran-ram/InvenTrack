@@ -91,9 +91,9 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
   }
 
   void _showAddUser() {
-    final nameCtrl = TextEditingController();
-    final emailCtrl = TextEditingController();
-    final passCtrl = TextEditingController();
+    final nameCtrl     = TextEditingController();
+    final usernameCtrl = TextEditingController();
+    final passCtrl     = TextEditingController();
     String role = 'SALES';
     String saleType = 'SHOP';
     final formKey = GlobalKey<FormState>();
@@ -107,7 +107,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             TextFormField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Name'), validator: (v) => v!.isEmpty ? 'Required' : null),
             const SizedBox(height: 8),
-            TextFormField(controller: emailCtrl, decoration: const InputDecoration(labelText: 'Email'), validator: (v) => v!.isEmpty ? 'Required' : null),
+            TextFormField(controller: usernameCtrl, decoration: const InputDecoration(labelText: 'Username'), validator: (v) => v!.isEmpty ? 'Required' : null),
             const SizedBox(height: 8),
             TextFormField(controller: passCtrl, obscureText: true, decoration: const InputDecoration(labelText: 'Password'), validator: (v) => v!.isEmpty ? 'Required' : null),
             const SizedBox(height: 8),
@@ -141,10 +141,10 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
             if (!formKey.currentState!.validate()) return;
             try {
               await ApiService.post('/users', {
-                'name': nameCtrl.text.trim(),
-                'email': emailCtrl.text.trim(),
+                'name':     nameCtrl.text.trim(),
+                'username': usernameCtrl.text.trim(),
                 'password': passCtrl.text,
-                'role': role,
+                'role':     role,
                 if (role == 'SALES') 'saleType': saleType,
               }, token: _token);
               if (!ctx.mounted) return;

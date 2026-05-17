@@ -159,7 +159,7 @@ function CompanyTab() {
           </div>
           <div className="form-group">
             <label>Email</label>
-            <input type="email" value={form.email} onChange={f('email')} placeholder="info@kulfiice.com" />
+            <input type="text" value={form.email} onChange={f('email')} placeholder="info@kulfiice.com" />
           </div>
           <div className="form-group">
             <label>Website</label>

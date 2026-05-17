@@ -102,7 +102,7 @@ export default function Profile() {
             </div>
             <div className="form-group" style={{ margin: 0 }}>
               <label>Email Address</label>
-              <input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="Enter email address" />
+              <input type="text" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="Enter email address" />
             </div>
           </div>
         </div>

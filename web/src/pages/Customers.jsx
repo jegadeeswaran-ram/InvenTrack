@@ -238,7 +238,7 @@ export default function Customers() {
                 </div>
                 <div className="form-group">
                   <label>Email</label>
-                  <input type="email" value={form.email} onChange={f('email')} placeholder="orders@company.com" />
+                  <input type="text" value={form.email} onChange={f('email')} placeholder="orders@company.com" />
                 </div>
               </div>
               <div className="form-group">

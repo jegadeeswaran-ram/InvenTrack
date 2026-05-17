@@ -65,50 +65,47 @@ export default function Sidebar() {
 
   return (
     <aside style={{
-      width: 224, minHeight: '100vh', background: 'var(--sidebar-bg)',
-      display: 'flex', flexDirection: 'column', position: 'fixed', left: 0, top: 0, bottom: 0,
-      transition: 'background 0.2s',
+      width: 224,
+      minHeight: '100vh',
+      background: 'var(--sidebar-bg)',
+      display: 'flex',
+      flexDirection: 'column',
+      position: 'fixed',
+      left: 0, top: 0, bottom: 0,
+      transition: 'background 0.25s',
     }}>
-      <div style={{ padding: '18px 18px 16px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+      <div className="sb-logo-area">
         <img src="/logo_sidebar.svg" alt="InvenTrack" style={{ width: 160, display: 'block' }} />
       </div>
 
-      <nav style={{ flex: 1, padding: '10px 10px', overflowY: 'auto' }}>
-        {nav.map((item, i) => {
-          if (item === null) return (
-            <div key={`divider-${i}`} style={{ height: 1, background: 'rgba(255,255,255,0.06)', margin: '6px 8px' }} />
-          );
-          const { path, label, Icon } = item;
-          return (
-            <NavLink key={path} to={path} end={path === '/'}
-              style={({ isActive }) => ({
-                display: 'flex', alignItems: 'center', gap: 10,
-                padding: '9px 12px', fontSize: 13, fontWeight: isActive ? 600 : 500,
-                color: isActive ? '#fff' : 'var(--sidebar-text)',
-                background: isActive ? 'var(--sidebar-active-bg)' : 'transparent',
-                borderRadius: 9, marginBottom: 2,
-                borderLeft: isActive ? '3px solid var(--primary)' : '3px solid transparent',
-                transition: 'all 0.15s', textDecoration: 'none',
-              })}
-            >
-              <Icon /><span>{label}</span>
-            </NavLink>
-          );
-        })}
-      </nav>
+      <div className="sb-nav-wrapper">
+        <nav className="sb-nav">
+          {nav.map((item, i) => {
+            if (item === null) return <div key={`d${i}`} className="sb-divider" />;
+            const { path, label, Icon } = item;
+            return (
+              <NavLink
+                key={path}
+                to={path}
+                end={path === '/'}
+                className={({ isActive }) => `sb-link${isActive ? ' active' : ''}`}
+              >
+                <span className="sb-icon"><Icon /></span>
+                <span className="sb-label">{label}</span>
+              </NavLink>
+            );
+          })}
+        </nav>
+      </div>
 
-      <div style={{ padding: '14px 12px 18px', borderTop: '1px solid rgba(255,255,255,0.07)' }}>
-        <button onClick={() => setDark(d => !d)} style={{
-          width: '100%', background: 'rgba(255,255,255,0.06)', color: 'var(--sidebar-text)',
-          padding: '8px 12px', borderRadius: 8, fontSize: 12, display: 'flex',
-          alignItems: 'center', gap: 8, marginBottom: 12, border: '1px solid rgba(255,255,255,0.08)', cursor: 'pointer',
-        }}>
+      <div className="sb-footer">
+        <button className="sb-theme-btn" onClick={() => setDark(d => !d)}>
           {dark ? <SunIcon /> : <MoonIcon />}
           {dark ? 'Light Mode' : 'Dark Mode'}
         </button>
 
-        <NavLink to="/profile" style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, padding: '0 2px', textDecoration: 'none' }}>
-          <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden' }}>
+        <NavLink to="/profile" className="sb-avatar-link">
+          <div className="sb-avatar">
             {user?.photo
               ? <img src={`data:image/jpeg;base64,${user.photo}`} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               : <span style={{ color: '#fff', fontSize: 13, fontWeight: 700 }}>{user?.name?.[0]?.toUpperCase()}</span>
@@ -120,11 +117,7 @@ export default function Sidebar() {
           </div>
         </NavLink>
 
-        <button onClick={handleLogout} style={{
-          width: '100%', background: 'rgba(229,57,53,0.1)', color: '#FF7675',
-          padding: '8px 12px', borderRadius: 8, fontSize: 12, display: 'flex',
-          alignItems: 'center', gap: 8, border: '1px solid rgba(229,57,53,0.18)', cursor: 'pointer',
-        }}>
+        <button className="sb-logout-btn" onClick={handleLogout}>
           <LogoutIcon /> Logout
         </button>
       </div>
